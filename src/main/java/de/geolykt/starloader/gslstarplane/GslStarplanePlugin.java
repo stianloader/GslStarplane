@@ -22,15 +22,23 @@ import de.geolykt.starplane.Utils;
 
 public class GslStarplanePlugin implements Plugin<Project> {
 
+    public static final String TASK_GROUP = "GslStarplane";
     static final WeakHashMap<Project, ObfuscationHandler> OBF_HANDLERS = new WeakHashMap<>();
     static final WeakHashMap<Project, JavaExec> RUN_TASKS = new WeakHashMap<>();
 
     public void apply(Project project) {
         project.getExtensions().create(GslExtension.class, "starplane", GslExtension.class);
         project.afterEvaluate(GslStarplanePlugin::runDeobf);
-        project.getTasks().create("remap", GslRemapTask.class);
+        project.getTasks().create("remap", GslRemapTask.class, (task) -> {
+            task.setDescription("Remap deobfuscated jars to use obfuscated mappings.");
+            task.setGroup(TASK_GROUP);
+        });
         RUN_TASKS.put(project, project.getTasks().create("runMod", JavaExec.class, (task) -> {
+            task.setDescription("Run the development environment.");
+            task.setGroup(TASK_GROUP);
             task.dependsOn(project.getTasks().create("deployMods", GslDeployModsTask.class, (arg10001) -> {
+                arg10001.setDescription("Deploy mods to the extension directory of the development environment.");
+                arg10001.setGroup(TASK_GROUP);
                 arg10001.dependsOn("jar");
             }));
             SourceSetContainer sourceSets = (SourceSetContainer) project.getProperties().get("sourceSets");
