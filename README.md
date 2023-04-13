@@ -32,7 +32,7 @@ probably look like that:
 pluginManagement {
     repositories {
         gradlePluginPortal()
-        mavenLocal()
+//      mavenLocal()   // Uncomment this line if you wish to debug the plugin
         mavenCentral()
         maven {
             name = 'Geolykt'
@@ -150,7 +150,6 @@ momentuum.
 
 The dev env can be run through the `runMod` task. The development environment
 allows you to test your mod quickly while still using deobfuscated mappings.
-Furthermore it allows you to use your IDE to debug your mod.
 
 The `runMod` task is a `JavaExec` task, which means it can be configured as one
 (if you need to add JVM Arguments), however in default circumstances no further
@@ -158,6 +157,10 @@ changes need to be applied.
 
 In order for the dev env to work, the `deployMods` task needs to be correctly
 configured.
+
+**NOTE:** Unlike the previous generation, GslStarplane does not yet support
+running the development environment with a debugger (at least not easily).
+This issue will get addressed in the near future.
 
 ## Selecting the Mod loader
 
@@ -175,6 +178,11 @@ with other processes such as shading. This will get fixed in the future.
 At the moment only spStarmap ontop of slintermediary can be used.
 In the future other variants of deobfuscation mappings (such as mmStarmap) may
 get supported.
+
+## Decompilation
+
+Unlike the previous generation, decompilation is not performed at the moment.
+This will change in the near future.
 
 ## Roadmap
 
