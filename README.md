@@ -125,7 +125,7 @@ other types can be used. A complete list of supported types is as follows:
  - `Jar` tasks
  - `DefaultAdhocSoftwareComponent` components
  - `String`, `File`, `Path` and all other types that can be converted to `File`
-   as per [Project#file](https://example.com).
+   as per [Project#file](https://docs.gradle.org/8.1/javadoc/org/gradle/api/Project.html#file-java.lang.Object-).
 
 Multiple files can be referenced, however only files that are mods (as in
 Starloader-launcher extensions) will get copied into the extension directory.
@@ -162,22 +162,38 @@ configured.
 running the development environment with a debugger (at least not easily).
 This issue will get addressed in the near future.
 
-## Selecting the Mod loader
+## Selecting the Mod loader (the `devRuntime` configuration)
 
 As of now, only the Starloader launcher can be used as a mod loader (though
 in theory modloaders that work as javaagents can easily be added). The version
-used depends on the contents of the runtime classpath - so the starloader
-launcher needs to be present on the runtime classpath in order for the dev
-env to work.
+used depends on the contents of the devRuntime configuration classpath
+- so the starloader launcher needs to be either present on the runtime classpath
+or be explicitly declared as being part of the devRuntime configuration in order
+for the dev env to work. The Starloader Launcher can thus be declared as follows:
 
-**WARNING:** We are aware of a flaw that makes the above process collide
-with other processes such as shading. This will get fixed in the future.
+```groovy
+dependencies {
+    // [...]
+    devRuntime "de.geolykt.starloader:launcher:20230122"
+    // [...]
+}
+```
+
+The devRuntime configuration extends from the `runtimeClasspath` configuration,
+so elements you added through `runtimeOnly` or similar will be available.
+However as this may has consequences on classloading that may be removed
+in the future (it is plausible that all runtime elements will be available to us
+anyways due to shading).
+
+It is generally not adviseable to add mods through the devRuntime, instead the
+deployMods should be configured accordingly. Failure to understand this may
+result in mods not properly loading or other classloading issues.
 
 ## Selecting the Mappings
 
 At the moment only spStarmap ontop of slintermediary can be used.
-In the future other variants of deobfuscation mappings (such as mmStarmap) may
-get supported.
+In the (far) future other variants of deobfuscation mappings (such as mmStarmap)
+may get supported.
 
 ## Decompilation
 

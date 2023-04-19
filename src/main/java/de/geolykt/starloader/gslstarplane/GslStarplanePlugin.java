@@ -6,13 +6,14 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.tasks.JavaExec;
-import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 
 import de.geolykt.starplane.JarStripper;
@@ -23,6 +24,7 @@ import de.geolykt.starplane.Utils;
 public class GslStarplanePlugin implements Plugin<Project> {
 
     public static final String TASK_GROUP = "GslStarplane";
+    public static final String DEV_RUNTIME_CONFIGURATION_NAME = "devRuntime";
     static final WeakHashMap<Project, ObfuscationHandler> OBF_HANDLERS = new WeakHashMap<>();
     static final WeakHashMap<Project, JavaExec> RUN_TASKS = new WeakHashMap<>();
 
@@ -33,6 +35,13 @@ public class GslStarplanePlugin implements Plugin<Project> {
             task.setDescription("Remap deobfuscated jars to use obfuscated mappings.");
             task.setGroup(TASK_GROUP);
         });
+        project.getConfigurations().register(DEV_RUNTIME_CONFIGURATION_NAME).configure(configuration -> {
+            configuration.setVisible(false);
+            configuration.setCanBeResolved(true);
+            configuration.setDescription("Dependencies included in the development runtime.");
+            SourceSetContainer sourceSets = (SourceSetContainer) Objects.requireNonNull(project.getProperties().get("sourceSets"));
+            configuration.extendsFrom(project.getConfigurations().getByName(sourceSets.getByName("main").getRuntimeClasspathConfigurationName()));
+        });
         RUN_TASKS.put(project, project.getTasks().create("runMod", JavaExec.class, (task) -> {
             task.setDescription("Run the development environment.");
             task.setGroup(TASK_GROUP);
@@ -41,16 +50,15 @@ public class GslStarplanePlugin implements Plugin<Project> {
                 arg10001.setGroup(TASK_GROUP);
                 arg10001.dependsOn("jar");
             }));
-            SourceSetContainer sourceSets = (SourceSetContainer) project.getProperties().get("sourceSets");
-            if (sourceSets == null) {
-                throw new IllegalStateException("Unable to find the source set container");
-            }
-            SourceSet set = sourceSets.getByName("main");
-            task.classpath(set.getRuntimeClasspath().minus(set.getOutput()));
+
             task.classpath(project.file(Utils.getSourceJar(GslLaunchEntrypoint.class).toAbsolutePath()));
             task.getMainClass().set("de.geolykt.starloader.gslstarplane.GslLaunchEntrypoint");
             task.setIgnoreExitValue(true);
             task.doFirst((ignore) -> {
+                // Resolve runtime dependencies
+                Configuration devRuntimeConfiguration = project.getConfigurations().getByName(DEV_RUNTIME_CONFIGURATION_NAME);
+                task.classpath(devRuntimeConfiguration.resolve());
+
                 // resolve data folder
                 Path dataFolder = task.getWorkingDir().toPath().resolve("data");
                 if (Files.notExists(dataFolder)) {
