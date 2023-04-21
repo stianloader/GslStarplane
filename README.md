@@ -70,6 +70,29 @@ At the moment, only one accesswidener can be used at a time.
 **Declaration of AWs to starplane is independent from the
 Starloader-launcher declaration of accesswideners!**
 
+## The `galimulatorDependencies` configuration
+
+Starplane automatically strips dependencies it can find from the galimulator
+jar. This may sound unintuitive but has the benefit of reducing the amount
+of classes that need to be decompiled and also provides (if configured
+properly) javadocs and sources in the IDE, leading to a more comfortable
+development experience.
+
+The dependencies that need to be stripped can be configured through the
+`galimulatorDependencies` configuration, however it is advised that the
+configuration is not touched. However, by default dependencies which are in the
+`galimulatorDependencies` configuration are not on the compile classpath.
+To change this, `compileOnlyApi` can be made to extend from
+`galimulatorDependencies`. In practice this can be done by inserting
+
+```groovy
+configurations {
+    compileOnlyApi.extendsFrom(galimulatorDependencies)
+}
+```
+
+in the project buildscript.
+
 ## The `remap` task
 
 The `remap` task remaps all references of deobfuscated members to use
@@ -197,8 +220,22 @@ may get supported.
 
 ## Decompilation
 
-Unlike the previous generation, decompilation is not performed at the moment.
-This will change in the near future.
+gslStarplane decompiles Galimulator with Quiltflower, a Fernflower-based
+decompiler. The dependencies added on the decompilation classpath are
+controlled by the `galimulatorDependencies`. Furthermore, gslStarplane always
+decompiles the stripped galimulator jar with compile-time access.
+
+The original line mappings are visible in the decompiled output,
+but starplane automatically changes the line mappings of the runtime and
+the stripped compile-time jars to reflect the line mappings of the decompiled
+output.
+
+**NOTE**: I am aware that QuiltMC (the organisation behind Quiltflower)
+has had a serious internal disruption on the 20th April 2023. However
+due to the relatively recent events it remains to be seen what the actual
+effects are. In the event that the organisation pulls the plug, gslStarplane
+will pivot to other alternatives. However as Quiltflower is present on
+the maven central no imminent harm can be done.
 
 ## Roadmap
 
