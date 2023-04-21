@@ -2,22 +2,19 @@ package de.geolykt.starloader.gslstarplane;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
-import java.util.Set;
 import java.util.WeakHashMap;
 
+import org.gradle.api.NamedDomainObjectProvider;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSetContainer;
 
-import de.geolykt.starplane.JarStripper;
-import de.geolykt.starplane.JarStripper.MavenId;
 import de.geolykt.starplane.ObfuscationHandler;
 import de.geolykt.starplane.Utils;
 
@@ -29,6 +26,11 @@ public class GslStarplanePlugin implements Plugin<Project> {
     static final WeakHashMap<Project, JavaExec> RUN_TASKS = new WeakHashMap<>();
 
     public void apply(Project project) {
+        NamedDomainObjectProvider<Configuration> galimulatorDepsConfigs = project.getConfigurations().register("galimulatorDependencies");
+        project.getConfigurations().register("galimulator", (config) -> {
+            runDeobf(project);
+            new GalimulatorDependency("compileOnly", project, OBF_HANDLERS.get(project), galimulatorDepsConfigs, config);
+        });
         project.getExtensions().create(GslExtension.class, "starplane", GslExtension.class);
         project.afterEvaluate(GslStarplanePlugin::runDeobf);
         project.getTasks().create("remap", GslRemapTask.class, (task) -> {
@@ -83,9 +85,18 @@ public class GslStarplanePlugin implements Plugin<Project> {
             return;
         }
         Path altCache = project.getBuildDir().toPath().resolve("gsl-starplane");
+
+        /*for (Attribute<?> attr : project.getDependencies().getArtifactTypes().getByName("jar").getAttributes().keySet()) {
+            LoggerFactory.getLogger(GslStarplanePlugin.class).warn("{}: {}", attr.getName(), attr.getType());
+        }*/
+
         ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), project.getResources().getText().fromFile(project.getExtensions().findByType(GslExtension.class).accesswidener, StandardCharsets.UTF_8.name()).asString());
         OBF_HANDLERS.put(project, oHandler);
+
+        //project.getDependencies().add("compileOnly", new GalimulatorDependency("compileOnly", project, oHandler));
+        /*
         Path strippedPath = altCache.resolve("galimulator-stripped.jar");
+        Path decompiledPath = altCache.resolve("galimulator-decompiled.jar");
         try {
             JarStripper stripper = new JarStripper();
             Set<MavenId> deps;
@@ -94,15 +105,18 @@ public class GslStarplanePlugin implements Plugin<Project> {
                 deps = stripper.getShadedDependencies(is);
             }
             deps.forEach((dep) -> project.getDependencies().add("compileOnlyApi", dep.toGAVNotation()));
-            deps.forEach((dep) -> project.getDependencies().add("runtimeOnly", dep.toGAVNotation()));
             if (oHandler.didRefresh || !Files.exists(strippedPath)) {
                 stripper.createStrippedJar(oHandler.getTransformedGalimulatorJar(), strippedPath, stripper.aggregate(altCache, deps));
+            }
+            if (oHandler.didRefresh || !Files.exists(decompiledPath)) {
+                decompile(project, oHandler.getTransformedGalimulatorJar().resolveSibling("galimulator-remapped-rt.jar"), strippedPath, decompiledPath);
             }
         } catch (IOException e) {
             throw new RuntimeException("Unable to generate stripped galimulator jar!", e);
         }
-        // FIXME Decompile!
-        project.getDependencies().add("compileOnly", project.files(strippedPath));
+
+        //project.getDependencies().add("compileOnly", strippedPath);
+        //project.getDependencies().add("compileOnly", project.files(strippedPath, decompiledPath));
 
         JavaExec runTask = RUN_TASKS.get(project);
         if (runTask != null) {
@@ -113,6 +127,6 @@ public class GslStarplanePlugin implements Plugin<Project> {
                 extensionDir = runTask.getWorkingDir().toPath().resolve("extensions");
             }
             runTask.jvmArgs("-Dgslstarplane.extensiondir=" + extensionDir.toAbsolutePath().toString());
-        }
+        }*/ // FIXME Fix the JavaExec setup!
     }
 }
