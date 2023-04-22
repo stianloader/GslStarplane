@@ -181,9 +181,22 @@ changes need to be applied.
 In order for the dev env to work, the `deployMods` task needs to be correctly
 configured.
 
-**NOTE:** Unlike the previous generation, GslStarplane does not yet support
-running the development environment with a debugger (at least not easily).
-This issue will get addressed in the near future.
+## The `genEclipseRuns` task
+
+While the `runMod` task works to execute the development environment, it does
+not allow to easily debug the environment with the aid of a debugger. While
+setting the `debug` option of the `runMod` task to true (as allowed by
+`JavaExec`) does allow to attach a debugger to the environment, IDEs such as
+Eclipse struggle with finding the sources of the classes. This can make
+debugging difficult. To counteract this, the `genEclipseRuns` task generates
+the `runMod.launch` file that can be used to execute the development
+environment right within your IDE with all the extras your IDE provides.
+
+**NOTE:** In most cases the generated \*.launch files won't work as necessary
+tasks (such as building the jar and inlining starplane-annotations) aren't run.
+To remedy this issue, improvements need to be done on the Starloader-launcher.
+Such improvements would also mean the end of whacky workarounds such as
+gslStarplane being on the classpath to act as a bootstrap.
 
 ## Selecting the Mod loader (the `devRuntime` configuration)
 
@@ -231,7 +244,7 @@ the stripped compile-time jars to reflect the line mappings of the decompiled
 output.
 
 **NOTE**: I am aware that QuiltMC (the organisation behind Quiltflower)
-has had a serious internal disruption on the 20th April 2023. However
+has had a serious internal disruption on the 20th April of 2023. However
 due to the relatively recent events it remains to be seen what the actual
 effects are. In the event that the organisation pulls the plug, gslStarplane
 will pivot to other alternatives. However as Quiltflower is present on

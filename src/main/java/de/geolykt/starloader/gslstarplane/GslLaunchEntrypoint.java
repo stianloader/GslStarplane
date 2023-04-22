@@ -9,7 +9,6 @@ import de.geolykt.starplane.slruntime.StarplaneStarloaderEntrypoint;
 
 public class GslLaunchEntrypoint {
 
-    
     public static void main(String[] args) {
         try {
             // Gradle can be rather ... difficult to work with.

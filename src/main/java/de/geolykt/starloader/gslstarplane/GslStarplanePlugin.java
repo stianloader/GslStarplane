@@ -103,6 +103,10 @@ public class GslStarplanePlugin implements Plugin<Project> {
                 }
             });
         }));
+        project.getTasks().create("genEclipseRuns", GslGenEclipseRunsTask.class, (task) -> {
+            task.setDescription("Generate eclipse *.launch files");
+            task.setGroup(TASK_GROUP);
+        });
     }
 
     private static void runDeobf(Project project) {
