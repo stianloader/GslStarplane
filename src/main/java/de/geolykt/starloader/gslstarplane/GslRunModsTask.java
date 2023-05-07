@@ -17,7 +17,6 @@ import org.gradle.api.component.SoftwareComponent;
 import org.gradle.api.internal.component.UsageContext;
 import org.gradle.api.plugins.internal.DefaultAdhocSoftwareComponent;
 import org.gradle.api.tasks.JavaExec;
-import org.gradle.api.tasks.TaskAction;
 import org.gradle.jvm.tasks.Jar;
 import org.gradle.work.DisableCachingByDefault;
 import org.jetbrains.annotations.NotNull;
@@ -30,15 +29,13 @@ public class GslRunModsTask extends JavaExec {
     @NotNull
     private final List<Object> extraMods = new ArrayList<>();
 
-    public GslRunModsTask() {/*
-        super.doFirst((ignore) -> this.setupLauncherProperties());
-        super.doFirst((ignore) -> this.resolveClasspath());
-        super.doFirst((ignore) -> this.linkDataFolder());*/
+    public GslRunModsTask() {
         super.dependsOn("deployMods");
         super.setDescription("Run the development environment.");
         super.setGroup(GslStarplanePlugin.TASK_GROUP);
         super.getMainClass().set("de.geolykt.starloader.launcher.IDELauncher");
         super.setIgnoreExitValue(true);
+        super.systemProperty("de.geolykt.starloader.launcher.IDELauncher.inlineStarplaneAnnotations", true);
     }
 
     public void from(Object notation) {

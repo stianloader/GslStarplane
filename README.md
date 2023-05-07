@@ -190,11 +190,11 @@ setting the `debug` option of the `runMods` task to true (as allowed by
 `JavaExec`) does allow to attach a debugger to the environment, IDEs such as
 Eclipse struggle with finding the sources of the classes. This can make
 debugging difficult. To counteract this, the `genEclipseRuns` task generates
-the `runMod.launch` file that can be used to execute the development
+the `runMods.launch` file that can be used to execute the development
 environment right within your IDE with all the extras your IDE provides.
 
 **NOTE:** In most cases the generated \*.launch files won't work as necessary
-tasks (such as inlining starplane-annotations and negating AWs) aren't run.
+tasks (such as negating AWs) aren't run.
 To remedy this issue, improvements need to be done on the Starloader-launcher.
 Such improvements would also mean the end of whacky workarounds such as
 gslStarplane generating runtime-access and compile-time access jars.

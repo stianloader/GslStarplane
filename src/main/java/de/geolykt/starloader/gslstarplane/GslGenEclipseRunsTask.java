@@ -34,7 +34,7 @@ public class GslGenEclipseRunsTask extends DefaultTask {
 
     public GslGenEclipseRunsTask() {
         super.dependsOn("deployMods");
-        this.runModLaunchFile = super.getProject().file("runMod.launch");
+        this.runModLaunchFile = super.getProject().file("runMods.launch");
     }
 
     @OutputFile // Required in order for caching to work
