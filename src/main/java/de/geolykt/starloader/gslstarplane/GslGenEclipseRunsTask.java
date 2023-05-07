@@ -5,19 +5,24 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskAction;
 import org.jetbrains.annotations.NotNull;
+import org.json.JSONArray;
 
 import de.geolykt.starplane.Utils;
 import de.geolykt.starplane.XmlWriter;
@@ -28,7 +33,8 @@ public class GslGenEclipseRunsTask extends DefaultTask {
     private final File runModLaunchFile;
 
     public GslGenEclipseRunsTask() {
-        this.runModLaunchFile = getProject().file("runMod.launch");
+        super.dependsOn("deployMods");
+        this.runModLaunchFile = super.getProject().file("runMod.launch");
     }
 
     @OutputFile // Required in order for caching to work
@@ -51,7 +57,7 @@ public class GslGenEclipseRunsTask extends DefaultTask {
             String jvmVersion = "17";
             Path workingDir = getProject().getProjectDir().toPath();
             List<String> jvmArgs = new ArrayList<>();
-            JavaExec jExecTask = (JavaExec) getProject().getTasks().findByName("runMod");
+            JavaExec jExecTask = (JavaExec) getProject().getTasks().findByName("runMods");
             if (jExecTask != null) {
                 if (jExecTask.getJavaVersion().isJava9Compatible()) {
                     jvmVersion = jExecTask.getJavaVersion().getMajorVersion();
@@ -60,7 +66,9 @@ public class GslGenEclipseRunsTask extends DefaultTask {
                 }
                 workingDir = jExecTask.getWorkingDir().toPath();
                 jvmArgs.addAll(jExecTask.getAllJvmArgs());
+                jvmArgs.add(GslStarplanePlugin.getBootPath(super.getProject()));
             }
+            jvmArgs.add("-Dde.geolykt.starloader.launcher.IDELauncher.modURLs=" + getModURLs().toString());
             Path dataFolder = workingDir.resolve("data");
 
             List<String> classpathElements = new ArrayList<>();
@@ -86,10 +94,8 @@ public class GslGenEclipseRunsTask extends DefaultTask {
             classpathElements.add("&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.buildship.core.gradleclasspathcontainer&quot; javaProject=&quot;" + getProject().getName() + "&quot; path=&quot;5&quot; type=&quot;4&quot;/&gt;&#10;");
             // JVM
             classpathElements.add("&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&gt;&#10;&lt;runtimeClasspathEntry containerPath=&quot;org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-" + jvmVersion + "/&quot; path=&quot;5&quot; type=&quot;4&quot;/&gt;&#10;");
-            // gslStarplane
-            classpathElements.add("&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&gt;&#10;&lt;runtimeClasspathEntry externalArchive=&quot;" + Utils.getSourceJar(GslLaunchEntrypoint.class).toAbsolutePath() + "&quot; path=&quot;5&quot; type=&quot;2&quot;/&gt;&#10;");
             writer.writeListAttr("org.eclipse.jdt.launching.CLASSPATH", classpathElements);
-            writer.writeStringAttr("org.eclipse.jdt.launching.MAIN_TYPE", "de.geolykt.starloader.gslstarplane.GslLaunchEntrypoint");
+            writer.writeStringAttr("org.eclipse.jdt.launching.MAIN_TYPE", "de.geolykt.starloader.launcher.IDELauncher");
             writer.writeListAttr("org.eclipse.jdt.launching.MODULEPATH", Collections.emptyList());
             writer.writeStringAttr("org.eclipse.jdt.launching.MODULE_NAME", getProject().getName());
             writer.writeStringAttr("org.eclipse.jdt.launching.PROJECT_ATTR", getProject().getName());
@@ -100,5 +106,21 @@ public class GslGenEclipseRunsTask extends DefaultTask {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private JSONArray getModURLs() {
+        JSONArray urls = new JSONArray();
+        SourceSetContainer sourceSets = (SourceSetContainer) Objects.requireNonNull(super.getProject().getProperties().get("sourceSets"));
+        for (SourceSet sourceSet : sourceSets) {
+            if (sourceSet.getName().equals("test")) {
+                continue;
+            }
+            try {
+                urls.put(getProject().file("bin/" + sourceSet.getName()).toURI().toURL().toExternalForm());
+            } catch (MalformedURLException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+        return new JSONArray().put(urls);
     }
 }

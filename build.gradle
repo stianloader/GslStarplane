@@ -13,6 +13,7 @@ targetCompatibility = compileJava.targetCompatibility = '11' // QF is Java 11+ -
 sourceCompatibility = compileJava.sourceCompatibility = '1.8' // Just in case we need to go back to Java 8 in the future
 
 repositories {
+    mavenLocal()
     maven {
         name 'geolykt'
         url 'https://geolykt.de/maven'
@@ -42,14 +43,6 @@ dependencies {
 
     // https://mvnrepository.com/artifact/org.jetbrains/annotations
     compileOnly group: 'org.jetbrains', name: 'annotations', version: '24.0.1'
-
-    // The SLL Version has to be specified by the consumer - so compileOnly
-    // (SLL is resolved through the runtime classpath of the consuming project)
-    compileOnly ("de.geolykt.starloader:launcher:20230122") {
-        // We don't truely need the bulk of the SLL dependencies at compile time.
-        // Mixin is the most serious offender however given that it is in a different repository
-        exclude module: 'mixin'
-    }
 }
 
 gradlePlugin {

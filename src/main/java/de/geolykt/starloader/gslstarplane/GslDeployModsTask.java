@@ -60,9 +60,6 @@ public class GslDeployModsTask extends ConventionTask {
     @NotNull
     @Internal
     public List<@NotNull Path> getModPaths() {
-        if (this.modJars.isEmpty()) {
-            throw new IllegalStateException("Cannot resolve the mods that need to be deployed. This can be done by using the \"modJars\" method. For more information double-check the manual at hand.");
-        }
         Set<@NotNull Path> out = new LinkedHashSet<>();
         for (Object modJar : this.modJars) {
             getLogger().info("Looking at " + modJar);
@@ -129,24 +126,24 @@ public class GslDeployModsTask extends ConventionTask {
         }
 
         // Remove any older copies of the mod
-        Path extensionDir = super.getProject().getExtensions().getByType(GslExtension.class).extensionDirectory;
-        if (extensionDir == null) {
+        Path modDirectory = super.getProject().getExtensions().getByType(GslExtension.class).modDirectory;
+        if (modDirectory == null) {
             JavaExec exec = GslStarplanePlugin.RUN_TASKS.get(super.getProject());
             if (exec == null) {
                 // TODO make this more configurable. This task may have other reasons to exist too!
                 throw new IllegalStateException("Unable to resolve the extension directory.");
             }
-            extensionDir = exec.getWorkingDir().toPath().resolve("extensions");
+            modDirectory = exec.getWorkingDir().toPath().resolve("mods");
         }
 
-        if (Files.notExists(extensionDir)) {
+        if (Files.notExists(modDirectory)) {
             try {
-                Files.createDirectories(extensionDir);
+                Files.createDirectories(modDirectory);
             } catch (IOException x) {
             }
         }
 
-        File[] children = extensionDir.toFile().listFiles();
+        File[] children = modDirectory.toFile().listFiles();
         if (children == null) {
             children = new File[0];
         }
@@ -169,9 +166,9 @@ public class GslDeployModsTask extends ConventionTask {
             try {
                 Path target = mod.getFileName();
                 if (target == null) {
-                    target = extensionDir.resolve("extension.jar");
+                    target = modDirectory.resolve("extension.jar");
                 } else {
-                    target = extensionDir.resolve(target);
+                    target = modDirectory.resolve(target);
                 }
                 Files.deleteIfExists(target);
                 this.transform(mod, target);

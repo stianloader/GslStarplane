@@ -25,7 +25,7 @@ public class XmlWriter extends BufferedWriter implements AutoCloseable {
         super.write("<stringAttribute key=\"");
         super.write(key);
         super.write("\" value=\"");
-        super.write(value);
+        super.write(value.replace("\"", "\\&quot;"));
         super.write("\"/>");
         super.newLine();
     }

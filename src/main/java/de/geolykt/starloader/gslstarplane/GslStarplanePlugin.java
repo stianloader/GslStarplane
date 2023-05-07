@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +32,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.java.decompiler.main.Fernflower;
 import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger.Severity;
 import org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences;
+import org.json.JSONArray;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -69,40 +71,11 @@ public class GslStarplanePlugin implements Plugin<Project> {
             SourceSetContainer sourceSets = (SourceSetContainer) Objects.requireNonNull(project.getProperties().get("sourceSets"));
             configuration.extendsFrom(project.getConfigurations().getByName(sourceSets.getByName("main").getRuntimeClasspathConfigurationName()));
         });
-        RUN_TASKS.put(project, project.getTasks().create("runMod", JavaExec.class, (task) -> {
-            task.setDescription("Run the development environment.");
+        project.getTasks().create("deployMods", GslDeployModsTask.class, (task) -> {
+            task.setDescription("Deploy mods to the extension directory of the development environment.");
             task.setGroup(TASK_GROUP);
-            task.dependsOn(project.getTasks().create("deployMods", GslDeployModsTask.class, (arg10001) -> {
-                arg10001.setDescription("Deploy mods to the extension directory of the development environment.");
-                arg10001.setGroup(TASK_GROUP);
-                arg10001.dependsOn("jar");
-            }));
-
-            task.classpath(project.file(Utils.getSourceJar(GslLaunchEntrypoint.class).toAbsolutePath()));
-            task.getMainClass().set("de.geolykt.starloader.gslstarplane.GslLaunchEntrypoint");
-            task.setIgnoreExitValue(true);
-            task.doFirst((ignore) -> {
-                // Resolve runtime dependencies
-                Configuration devRuntimeConfiguration = project.getConfigurations().getByName(DEV_RUNTIME_CONFIGURATION_NAME);
-                task.classpath(devRuntimeConfiguration.resolve());
-
-                // resolve data folder
-                Path dataFolder = task.getWorkingDir().toPath().resolve("data");
-                if (Files.notExists(dataFolder)) {
-                    File gameFolder = Utils.getGameDir(Utils.STEAM_GALIMULATOR_APPNAME);
-                    Path galimDataFolder;
-                    if (gameFolder == null || Files.notExists(galimDataFolder = gameFolder.toPath().resolve("data"))) {
-                        task.getLogger().warn("Couldn't locate data folder. You might need to copy the data folder manually in order to be able to run this task");
-                    } else {
-                        try {
-                            Files.createSymbolicLink(dataFolder, galimDataFolder);
-                        } catch (IOException e) {
-                            task.getLogger().warn("Cannot link data folder. You might need to copy the data folder manually in order to be able to run this task", e);
-                        }
-                    }
-                }
-            });
-        }));
+        });
+        RUN_TASKS.put(project, project.getTasks().create("runMods", GslRunModsTask.class));
         project.getTasks().create("genEclipseRuns", GslGenEclipseRunsTask.class, (task) -> {
             task.setDescription("Generate eclipse *.launch files");
             task.setGroup(TASK_GROUP);
@@ -120,14 +93,27 @@ public class GslStarplanePlugin implements Plugin<Project> {
         resolve(project, oHandler);
         JavaExec runTask = RUN_TASKS.get(project);
         if (runTask != null) {
-            runTask.classpath(project.file(oHandler.getTransformedGalimulatorJar().resolveSibling("galimulator-remapped-rt.jar")));
-            runTask.jvmArgs("-Dgslstarplane.galimulator=" + oHandler.getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toString());
-            Path extensionDir = project.getExtensions().getByType(GslExtension.class).extensionDirectory;
-            if (extensionDir == null) {
-                extensionDir = runTask.getWorkingDir().toPath().resolve("extensions");
+            runTask.systemProperty("de.geolykt.starloader.launcher.CLILauncher.mainClass", "com.example.Main");
+            //  + oHandler.getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toString()
+            Path modsDir = project.getExtensions().getByType(GslExtension.class).modDirectory;
+            if (modsDir == null) {
+                modsDir = runTask.getWorkingDir().toPath().resolve("mods");
             }
-            runTask.jvmArgs("-Dgslstarplane.extensiondir=" + extensionDir.toAbsolutePath().toString());
+            runTask.systemProperty("de.geolykt.starloader.launcher.IDELauncher.modDirectory", modsDir.toAbsolutePath().toString());
         }
+    }
+
+    static String getBootPath(Project p) {
+        JSONArray bootPath = new JSONArray();
+        try {
+            bootPath.put(OBF_HANDLERS.get(p).getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toUri().toURL().toExternalForm());
+            for (File f : p.getConfigurations().getByName(GALIM_DEPS_CONFIGURATION_NAME).resolve()) {
+                bootPath.put(f.toURI().toURL().toExternalForm());
+            }
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        }
+        return "-Dde.geolykt.starloader.launcher.IDELauncher.bootURLs=" +  bootPath.toString();
     }
 
     public static void resolve(Project project, ObfuscationHandler obfHandler) {
@@ -136,7 +122,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
         // compileStrippedSource = decompiled stripped galimulator jar with compile-time accesss
         // runtimeLarge = complete galimulator jar with runtime access
         Path compileLarge = obfHandler.getTransformedGalimulatorJar();
-        Path compileStripped = compileLarge.resolveSibling("galimulator-remapped-stripped-" + Autodeobf.getVersion() + "-.jar");
+        Path compileStripped = compileLarge.resolveSibling("galimulator-remapped-stripped-" + Autodeobf.getVersion() + ".jar");
         Path compileStrippedSource = compileLarge.resolveSibling("galimulator-remapped-stripped-" + Autodeobf.getVersion() + "-sources.jar");
         Path runtimeLarge = compileLarge.resolveSibling("galimulator-remapped-rt.jar");
 

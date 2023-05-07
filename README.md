@@ -130,19 +130,20 @@ build {
 
 ## Defining the mods in the development environment
 
-The mods that are run in the dev env (which is started through the `runMod`
+The mods that are run in the dev env (which is started through the `runMods`
 task that will be talked about later on) can be selected by configuring the
-`deployMods` task. If you mod does not depend on any other mods, the following
-would be one of plenty correct approaches:
+`deployMods` task. If you mod does not depend on any other mods, nothing needs to
+be done. However if you want to depend on third party mods, an approach such
+as the one below can be used: 
 
 ```groovy
 deployMods {
-    from components['java']
+    from "libs/mymod.jar"
 }
 ```
 
-Aside from `DefaultAdhocSoftwareComponent` (which is used in the above example)
-other types can be used. A complete list of supported types is as follows:
+Aside from `String` (which is used in the above example) other types can be used.
+A complete list of supported types is as follows:
 
  - `PublishArtifact`
  - `Jar` tasks
@@ -158,8 +159,8 @@ will get removed in order to avoid duplicates.
 During the copy process the starplane annotations will get evaluated and
 their access wideners are also accordingly transformed.
 
-**WARNING:** External mods are not yet fully supported. However, this will change
-in the future.
+**WARNING:** External mods (as in those residing in maven repos) are not yet
+fully supported. However, this will change in the future.
 
 **WARNING:** Access wideners from other mods might not get correctly applied.
 Further investigation is needed (there seems to be a flaw in how we deal
@@ -171,10 +172,10 @@ momentuum.
 
 ## Running the development environment
 
-The dev env can be run through the `runMod` task. The development environment
+The dev env can be run through the `runMods` task. The development environment
 allows you to test your mod quickly while still using deobfuscated mappings.
 
-The `runMod` task is a `JavaExec` task, which means it can be configured as one
+The `runMods` task is a `JavaExec` task, which means it can be configured as one
 (if you need to add JVM Arguments), however in default circumstances no further
 changes need to be applied.
 
@@ -183,9 +184,9 @@ configured.
 
 ## The `genEclipseRuns` task
 
-While the `runMod` task works to execute the development environment, it does
+While the `runMods` task works to execute the development environment, it does
 not allow to easily debug the environment with the aid of a debugger. While
-setting the `debug` option of the `runMod` task to true (as allowed by
+setting the `debug` option of the `runMods` task to true (as allowed by
 `JavaExec`) does allow to attach a debugger to the environment, IDEs such as
 Eclipse struggle with finding the sources of the classes. This can make
 debugging difficult. To counteract this, the `genEclipseRuns` task generates
@@ -193,10 +194,11 @@ the `runMod.launch` file that can be used to execute the development
 environment right within your IDE with all the extras your IDE provides.
 
 **NOTE:** In most cases the generated \*.launch files won't work as necessary
-tasks (such as building the jar and inlining starplane-annotations) aren't run.
+tasks (such as inlining starplane-annotations and negating AWs) aren't run.
 To remedy this issue, improvements need to be done on the Starloader-launcher.
 Such improvements would also mean the end of whacky workarounds such as
-gslStarplane being on the classpath to act as a bootstrap.
+gslStarplane generating runtime-access and compile-time access jars.
+With negated AWs only one slim compile-time access jar would be needed.
 
 ## Selecting the Mod loader (the `devRuntime` configuration)
 
@@ -244,11 +246,15 @@ the stripped compile-time jars to reflect the line mappings of the decompiled
 output.
 
 **NOTE**: I am aware that QuiltMC (the organisation behind Quiltflower)
-has had a serious internal disruption on the 20th April of 2023. However
-due to the relatively recent events it remains to be seen what the actual
-effects are. In the event that the organisation pulls the plug, gslStarplane
-will pivot to other alternatives. However as Quiltflower is present on
-the maven central no imminent harm can be done.
+has had a serious internal disruption starting from the 20th April of 2023. Due
+to the organisation seemingly not being aware of the importance of good wording
+(please: be aware that words are the most important thing ever if you intend
+to intend to depos someone. Using wording that can only be described as counter-
+productive is stupid), I have been banned on Quilt's toolchain discord. I thus
+deem it likely that I have been completely banned from the entirety of the quilt
+project. The current strategy is to just wait and hope that they forget that I
+am banned. Should that not work, Quiltflower will probably get forked by us (or
+we use a fork from an organisation that suffered a similar fate).
 
 ## Roadmap
 
