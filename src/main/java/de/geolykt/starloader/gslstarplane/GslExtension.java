@@ -1,10 +1,12 @@
 package de.geolykt.starloader.gslstarplane;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 
+import org.gradle.api.Project;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -53,5 +55,13 @@ public class GslExtension {
         for (BiConsumer<ModType, Object> hook : this.updateHooks) {
             hook.accept(ModType.INTERNAL, notation);
         }
+    }
+
+    @Nullable
+    public String getAcessWidenerContents(@NotNull Project project) {
+        if (this.accesswidener == null) {
+            return null;
+        }
+        return project.getResources().getText().fromFile(this.accesswidener, StandardCharsets.UTF_8.name()).asString();
     }
 }

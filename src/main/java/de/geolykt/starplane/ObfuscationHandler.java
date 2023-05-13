@@ -276,7 +276,7 @@ public class ObfuscationHandler {
                     deobfuscator.write(os, cleanGalimJar.toPath());
                 }
                 // Compile-time Access = Runtime Access
-                Files.copy(compileAccess, runAccess);
+                Files.copy(compileAccess, runAccess, StandardCopyOption.REPLACE_EXISTING);
 
                 try (BufferedWriter bw = Files.newBufferedWriter(awHash, StandardCharsets.UTF_8)) {
                     bw.write("null-");

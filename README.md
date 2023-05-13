@@ -246,7 +246,7 @@ the stripped compile-time jars to reflect the line mappings of the decompiled
 output.
 
 **NOTE**: I am aware that QuiltMC (the organisation behind Quiltflower)
-has had a serious internal disruption starting from the 20th April of 2023. Due
+had a serious internal disruption starting from the 20th April of 2023. Due
 to the organisation seemingly not being aware of the importance of good wording
 (please: be aware that words are the most important thing ever if you intend
 to intend to depos someone. Using wording that can only be described as counter-
