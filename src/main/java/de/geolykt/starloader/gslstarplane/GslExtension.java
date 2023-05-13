@@ -20,6 +20,8 @@ public class GslExtension {
     @Nullable
     public Object accesswidener;
     @Nullable
+    public Object reversibleAccessSetter;
+    @Nullable
     public Path modDirectory;
     @NotNull
     public final List<Object> externalMods = new ArrayList<>();
@@ -58,10 +60,22 @@ public class GslExtension {
     }
 
     @Nullable
-    public String getAcessWidenerContents(@NotNull Project project) {
+    public String getRASContents(@NotNull Project project) {
+        if (this.reversibleAccessSetter == null) {
+            return null;
+        }
+        return project.getResources().getText().fromFile(this.reversibleAccessSetter, StandardCharsets.UTF_8.name()).asString();
+    }
+
+    @Nullable
+    public String getAccessWidenerContents(@NotNull Project project) {
         if (this.accesswidener == null) {
             return null;
         }
         return project.getResources().getText().fromFile(this.accesswidener, StandardCharsets.UTF_8.name()).asString();
+    }
+
+    public void withRAS(Object notation) {
+        this.reversibleAccessSetter = notation;
     }
 }

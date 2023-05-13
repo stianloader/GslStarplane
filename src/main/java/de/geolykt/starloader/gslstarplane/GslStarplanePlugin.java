@@ -88,13 +88,13 @@ public class GslStarplanePlugin implements Plugin<Project> {
         }
         Path altCache = project.getBuildDir().toPath().resolve("gsl-starplane");
 
-        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), project.getExtensions().getByType(GslExtension.class).getAcessWidenerContents(project));
+        GslExtension extension = project.getExtensions().getByType(GslExtension.class);
+        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getAccessWidenerContents(project), extension.getRASContents(project));
         OBF_HANDLERS.put(project, oHandler);
         resolve(project, oHandler);
         JavaExec runTask = RUN_TASKS.get(project);
         if (runTask != null) {
             runTask.systemProperty("de.geolykt.starloader.launcher.CLILauncher.mainClass", "com.example.Main");
-            //  + oHandler.getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toString()
             Path modsDir = project.getExtensions().getByType(GslExtension.class).modDirectory;
             if (modsDir == null) {
                 modsDir = runTask.getWorkingDir().toPath().resolve("mods");

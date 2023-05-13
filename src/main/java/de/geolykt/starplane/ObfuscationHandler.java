@@ -7,7 +7,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.StringReader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,10 +18,12 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.jar.JarFile;
@@ -49,6 +53,10 @@ import de.geolykt.starloader.deobf.Oaktree;
 import de.geolykt.starloader.deobf.access.AccessTransformInfo;
 import de.geolykt.starloader.deobf.access.AccessWidenerReader;
 import de.geolykt.starloader.deobf.remapper.Remapper;
+import de.geolykt.starloader.ras.AbstractTinyRASRemapper;
+import de.geolykt.starloader.ras.ReversibleAccessSetterContext;
+import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformFailure;
+import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformScope;
 import de.geolykt.starplane.remapping.MultiMappingProvider;
 import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
 import de.geolykt.starplane.remapping.StarplaneMappingsProvider;
@@ -64,6 +72,9 @@ public class ObfuscationHandler {
     @Nullable
     private final String accessWidenerContent;
 
+    @Nullable
+    private final String rasContent;
+
     @NotNull
     private final Path cacheDir;
 
@@ -72,10 +83,11 @@ public class ObfuscationHandler {
     @NotNull
     private final Path projectDir;
 
-    public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String accessWidenerContent) {
+    public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String accessWidenerContent, @Nullable String rasContent) {
         this.cacheDir = cacheDir;
         this.projectDir = projectDir;
         this.accessWidenerContent = accessWidenerContent;
+        this.rasContent = rasContent;
     }
 
     @NotNull
@@ -110,6 +122,26 @@ public class ObfuscationHandler {
                 }
             } catch (Exception e) {
                 throw new IllegalStateException("Unable to read accesswidener!", e);
+            }
+        }
+
+        final ReversibleAccessSetterContext rasInfo;
+        String rasContent = this.rasContent;
+
+        if (rasContent == null) {
+            rasInfo = null;
+        } else {
+            try (DigestInputStream din = new DigestInputStream(new ByteArrayInputStream(rasContent.getBytes(StandardCharsets.UTF_8)), MessageDigest.getInstance("SHA-1"));
+                    BufferedReader br = new BufferedReader(new InputStreamReader(din))) {
+                rasInfo = new ReversibleAccessSetterContext(RASTransformScope.BUILDTIME, false);
+                rasInfo.read("<mod>", br, false);
+                if (currentHash == null) {
+                    currentHash = toHexHash(din.getMessageDigest().digest());
+                } else {
+                    currentHash = "-" + toHexHash(din.getMessageDigest().digest());
+                }
+            } catch (Exception e) {
+                throw new IllegalStateException("Unable to read reversibleAccessSetter!", e);
             }
         }
 
@@ -270,7 +302,7 @@ public class ObfuscationHandler {
 
             LOGGER.info("Computed intermediaries of classes in " + (System.currentTimeMillis() - startIntermediarisation) + " ms.");
 
-            if (atInfo == null) {
+            if (atInfo == null && rasInfo == null) {
                 try (OutputStream os = Files.newOutputStream(compileAccess)) {
                     assert os != null;
                     deobfuscator.write(os, cleanGalimJar.toPath());
@@ -290,16 +322,29 @@ public class ObfuscationHandler {
                 Map<String, ClassNode> compileNodes = new HashMap<>();
 
                 for (ClassNode node : deobfuscator.getClassNodesDirectly()) {
+                    // Apply RAS
+                    if (rasInfo != null) {
+                        try {
+                            rasInfo.accept(node);
+                        } catch (RASTransformFailure e) {
+                            LOGGER.error("Unable to apply RAS on class {}", node.name, e);
+                        }
+                    }
+
                     ClassNode duplicate = new ClassNode();
                     node.accept(duplicate);
                     runNodes.add(duplicate);
                     compileNodes.put(node.name, node);
                     // Apply runtime AWs
-                    atInfo.apply(duplicate, true);
+                    if (atInfo != null) {
+                        atInfo.apply(duplicate, true);
+                    }
                 }
 
                 // Apply compile-time AWs
-                atInfo.apply(compileNodes, LOGGER::error);
+                if (atInfo != null) {
+                    atInfo.apply(compileNodes, LOGGER::error);
+                }
 
                 try (BufferedWriter bw = Files.newBufferedWriter(awHash, StandardCharsets.UTF_8)) {
                     bw.write(currentHash);
@@ -414,6 +459,12 @@ public class ObfuscationHandler {
             tinyRemapper.readInputs(jarPath);
             tinyRemapper.readClassPath(starmappedGalimulator);
             outputConsumer.addNonClassFiles(jarPath, tinyRemapper, Arrays.asList(new TRAccessWidenerRemapper()));
+            outputConsumer.addNonClassFiles(jarPath, tinyRemapper, Arrays.asList(new AbstractTinyRASRemapper() {
+                @Override
+                public boolean canTransform(TinyRemapper remapper, Path relativePath) {
+                    return relativePath.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ras");
+                }
+            }));
             LOGGER.info("Reobfuscating... (applying)");
             tinyRemapper.apply(outputConsumer);
         } catch (IOException t) {
