@@ -22,6 +22,8 @@ public class GslExtension {
     @Nullable
     public Object reversibleAccessSetter;
     @Nullable
+    public Object eclipseEEA;
+    @Nullable
     public Path modDirectory;
     @NotNull
     public final List<Object> externalMods = new ArrayList<>();

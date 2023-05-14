@@ -51,9 +51,12 @@ with such a setup. So continue reading!
 
 ## Specifing Access Wideners
 
+**WARNING: ACCESS WIDENERS ARE DEPRECATED FOR REMOVAL.
+USE REVERSIBLE ACCESS SETTERS INSTEAD.**
+
 **WARNING:** Access Wideners are as dangerous as they are simple to use.
 Widening access of a method could make methods that normally would be
-independent of each other override each other.
+independent of each other to override each other.
 
 Access Wideners can optionally be declared in the `build.gradle` as follows:
 
@@ -69,6 +72,36 @@ galimulator jar and will remap the accesswidener in `remap` task.
 At the moment, only one accesswidener can be used at a time.
 **Declaration of AWs to starplane is independent from the
 Starloader-launcher declaration of accesswideners!**
+
+The usage of access wideners is not and will not be supported when launching
+the development environment within your IDE. This is caused by a technical
+difficulty with source lookups. Reversible access setters do not have this
+problem.
+
+## Specifing reversible access setters
+
+**WARNING:** Reversible access setters are as dangerous as they are simple to
+use. Changing access of a method could make methods that normally would be
+independent of each other to override each other.
+
+Reversible access setters can optionally be declared in the `build.gradle`
+as follows:
+
+```groovy
+starplane {
+    withRAS(rootProject.file("src/main/resources/starloader-api.ras"))
+}
+```
+
+Starplane will automatically apply the contents of the reversible access
+setter on the galimulator jar and will remap all \*.ras file during the
+`remap` task.
+
+At the moment, only one reversible access setter can be set at a time
+and transitive reversible access setters are ignored.
+
+**Declaration of reversible access setters to starplane is independent
+from the Starloader-launcher declaration of reversible access setters!**
 
 ## The `galimulatorDependencies` configuration
 
@@ -212,7 +245,7 @@ for the dev env to work. The Starloader Launcher can thus be declared as follows
 ```groovy
 dependencies {
     // [...]
-    devRuntime "de.geolykt.starloader:launcher:20230122"
+    devRuntime "de.geolykt.starloader:launcher:4.0.0-20230513"
     // [...]
 }
 ```
@@ -255,6 +288,44 @@ deem it likely that I have been completely banned from the entirety of the quilt
 project. The current strategy is to just wait and hope that they forget that I
 am banned. Should that not work, Quiltflower will probably get forked by us (or
 we use a fork from an organisation that suffered a similar fate).
+
+## Eclipse external null annotations
+
+In order to provide full parity over the old starplane on slbrachyura system
+gslStarplane supports the feature you'd expect the least: Eclipse external null
+annotations. EEAs can be added like so:
+
+```groovy
+plugins {
+    // [...]
+    id 'eclipse'
+}
+
+starplane {
+    eclipseEEA = rootProject.file("src/eclipse-eea")
+}
+```
+
+and will be applied on all gradle classpath elements.
+
+
+Note: the backend code within gslStarplane is basically equal to
+
+```groovy
+apply plugin: 'eclipse'
+
+eclipse {
+    classpath {
+      containers 'org.eclipse.buildship.core.gradleclasspathcontainer'  
+      file {
+            whenMerged {
+                def source = entries.find { it.path == 'org.eclipse.buildship.core.gradleclasspathcontainer' }
+                source.entryAttributes['annotationpath'] = "src/eclipse-eea"
+            }
+        }
+    }
+}
+```
 
 ## Roadmap
 

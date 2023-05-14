@@ -28,6 +28,10 @@ import org.gradle.api.UnknownDomainObjectException;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSetContainer;
+import org.gradle.plugins.ide.eclipse.model.Classpath;
+import org.gradle.plugins.ide.eclipse.model.ClasspathEntry;
+import org.gradle.plugins.ide.eclipse.model.Container;
+import org.gradle.plugins.ide.eclipse.model.EclipseModel;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.java.decompiler.main.Fernflower;
 import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger.Severity;
@@ -40,6 +44,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.slf4j.LoggerFactory;
 
 import de.geolykt.starplane.Autodeobf;
 import de.geolykt.starplane.JarStripper;
@@ -60,6 +65,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
     public void apply(Project project) {
         project.getExtensions().create(GslExtension.class, "starplane", GslExtension.class);
         project.afterEvaluate(GslStarplanePlugin::runDeobf);
+        project.afterEvaluate(GslStarplanePlugin::setupEEA);
         project.getTasks().create("remap", GslRemapTask.class, (task) -> {
             task.setDescription("Remap deobfuscated jars to use obfuscated mappings.");
             task.setGroup(TASK_GROUP);
@@ -82,6 +88,36 @@ public class GslStarplanePlugin implements Plugin<Project> {
         });
     }
 
+    private static void setupEEA(Project project) {
+        GslExtension extension = project.getExtensions().getByType(GslExtension.class);
+        if (extension.eclipseEEA == null) {
+            return;
+        }
+        File eeaPath = project.file(extension.eclipseEEA);
+        EclipseModel eclipseModel = (EclipseModel) project.getProperties().get("eclipse");
+        if (eclipseModel == null) {
+            LoggerFactory.getLogger(GslStarplanePlugin.class).error("Cannot setup EEA as the eclipse plugin is missing!");
+            return;
+        }
+        // Based on https://github.com/eclipse/buildship/issues/421#issuecomment-285344240
+        eclipseModel.getClasspath().containers("org.eclipse.buildship.core.gradleclasspathcontainer");
+        eclipseModel.getClasspath().file((merger) -> {
+            merger.whenMerged((object) -> {
+                Classpath classpath = (Classpath) object;
+                for (ClasspathEntry entry : classpath.getEntries()) {
+                    if (!(entry instanceof Container)) {
+                        continue;
+                    }
+                    Container container = (Container) entry;
+                    if (!container.getPath().equals("org.eclipse.buildship.core.gradleclasspathcontainer")) {
+                        continue;
+                    }
+                    container.getEntryAttributes().putIfAbsent("annotationpath", eeaPath.getAbsolutePath().toString());
+                }
+            });
+        });
+    }
+
     private static void runDeobf(Project project) {
         if (OBF_HANDLERS.containsKey(project)) {
             return;
@@ -95,7 +131,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
         JavaExec runTask = RUN_TASKS.get(project);
         if (runTask != null) {
             runTask.systemProperty("de.geolykt.starloader.launcher.CLILauncher.mainClass", "com.example.Main");
-            Path modsDir = project.getExtensions().getByType(GslExtension.class).modDirectory;
+            Path modsDir = extension.modDirectory;
             if (modsDir == null) {
                 modsDir = runTask.getWorkingDir().toPath().resolve("mods");
             }
