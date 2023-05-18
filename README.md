@@ -49,35 +49,6 @@ pluginManagement {
 And that is it! Unfortunately you won't be able to use the plugin for much
 with such a setup. So continue reading!
 
-## Specifing Access Wideners
-
-**WARNING: ACCESS WIDENERS ARE DEPRECATED FOR REMOVAL.
-USE REVERSIBLE ACCESS SETTERS INSTEAD.**
-
-**WARNING:** Access Wideners are as dangerous as they are simple to use.
-Widening access of a method could make methods that normally would be
-independent of each other to override each other.
-
-Access Wideners can optionally be declared in the `build.gradle` as follows:
-
-```groovy
-starplane {
-    accesswidener = rootProject.file("src/main/resources/aw.accesswidener")
-}
-```
-
-Starplane will automatically apply the contents of the accesswidener on the
-galimulator jar and will remap the accesswidener in `remap` task.
-
-At the moment, only one accesswidener can be used at a time.
-**Declaration of AWs to starplane is independent from the
-Starloader-launcher declaration of accesswideners!**
-
-The usage of access wideners is not and will not be supported when launching
-the development environment within your IDE. This is caused by a technical
-difficulty with source lookups. Reversible access setters do not have this
-problem.
-
 ## Specifing reversible access setters
 
 **WARNING:** Reversible access setters are as dangerous as they are simple to

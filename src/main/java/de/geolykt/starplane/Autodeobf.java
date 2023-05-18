@@ -1973,13 +1973,16 @@ public class Autodeobf implements StarmappedNames {
         if (owner == null) {
             throw new NullPointerException("owner is null");
         }
+        if (desc == null) {
+            throw new NullPointerException("desc is null");
+        }
         try {
-            remapper.remapMethod(owner, desc, oldName, newName);
+            this.remapper.remapMethod(owner, desc, oldName, newName);
             // Format: METHOD owner originalName descriptor newName
             mappingsOut.write("METHOD " + owner + " " + oldName + " " + desc + " " +  newName + "\n");
         } catch (ConflicitingMappingException e) {
             try {
-                throw new RuntimeException("Old mapping: " + remapper.remapReference(owner + "." + oldName + desc, new StringBuilder()) + ". Proposed: " + remapper.remapReference(owner, new StringBuilder()) + "." + newName + desc, e);
+                throw new RuntimeException("Old mapping: " + this.remapper.getRemappedClassName(owner) + "." + this.remapper.getRemappedMethodName(owner, oldName, desc) + this.remapper.getRemappedMethodDescriptor(desc, new StringBuilder()) + ". Proposed: " + this.remapper.getRemappedClassName(owner) + "." + newName + desc, e);
             } catch (RuntimeException e2) {
                 e2.printStackTrace();
             }

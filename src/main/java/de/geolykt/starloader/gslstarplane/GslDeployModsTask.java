@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.zip.ZipEntry;
@@ -34,9 +35,9 @@ import org.json.JSONObject;
 import net.fabricmc.tinyremapper.OutputConsumerPath;
 import net.fabricmc.tinyremapper.TinyRemapper;
 
+import de.geolykt.starloader.ras.AbstractTinyRASRemapper;
 import de.geolykt.starplane.Utils;
 import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
-import de.geolykt.starplane.remapping.TRAccessWidenerRemapper;
 
 @DisableCachingByDefault(because = "Not worth it")
 public class GslDeployModsTask extends ConventionTask {
@@ -188,7 +189,12 @@ public class GslDeployModsTask extends ConventionTask {
 
         try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(target).build()) {
             tinyRemapper.readInputs(source);
-            outputConsumer.addNonClassFiles(source, tinyRemapper, Arrays.asList(new TRAccessWidenerRemapper()));
+            outputConsumer.addNonClassFiles(source, tinyRemapper, Arrays.asList(new AbstractTinyRASRemapper() {
+                @Override
+                public boolean canTransform(TinyRemapper remapper, Path relativePath) {
+                    return relativePath.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ras");
+                }
+            }));
             tinyRemapper.apply(outputConsumer);
         } catch (IOException e) {
             throw new UncheckedIOException(e);

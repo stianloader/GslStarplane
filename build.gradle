@@ -15,10 +15,6 @@ sourceCompatibility = compileJava.sourceCompatibility = '1.8' // Just in case we
 repositories {
     mavenLocal()
     maven {
-        name 'geolykt'
-        url 'https://geolykt.de/maven'
-    }
-    maven {
         name 'fabric'
         url 'https://maven.fabricmc.net/'
     }
@@ -26,13 +22,13 @@ repositories {
 }
 
 dependencies {
-    implementation "de.geolykt.starloader:sl-deobf:0.0.2"
+    implementation "de.geolykt.starloader:sl-deobf:0.1.0"
     implementation "de.geolykt.starloader:reversible-access-setter:1.0.0"
     implementation gradleApi()
-    implementation "org.ow2.asm:asm:9.4"
-    implementation "org.ow2.asm:asm-tree:9.4"
-    implementation "org.ow2.asm:asm-util:9.4"
-    implementation "org.ow2.asm:asm-commons:9.4"
+    implementation "org.ow2.asm:asm:9.5"
+    implementation "org.ow2.asm:asm-tree:9.5"
+    implementation "org.ow2.asm:asm-util:9.5"
+    implementation "org.ow2.asm:asm-commons:9.5"
 
     // https://mvnrepository.com/artifact/org.json/json
     implementation 'org.json:json:20230227'

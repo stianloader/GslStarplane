@@ -18,8 +18,6 @@ public class GslExtension {
     }
 
     @Nullable
-    public Object accesswidener;
-    @Nullable
     public Object reversibleAccessSetter;
     @Nullable
     public Object eclipseEEA;
@@ -67,14 +65,6 @@ public class GslExtension {
             return null;
         }
         return project.getResources().getText().fromFile(this.reversibleAccessSetter, StandardCharsets.UTF_8.name()).asString();
-    }
-
-    @Nullable
-    public String getAccessWidenerContents(@NotNull Project project) {
-        if (this.accesswidener == null) {
-            return null;
-        }
-        return project.getResources().getText().fromFile(this.accesswidener, StandardCharsets.UTF_8.name()).asString();
     }
 
     public void withRAS(Object notation) {

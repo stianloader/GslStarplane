@@ -48,8 +48,6 @@ import de.geolykt.starloader.deobf.ClassWrapper;
 import de.geolykt.starloader.deobf.IntermediaryGenerator;
 import de.geolykt.starloader.deobf.MethodReference;
 import de.geolykt.starloader.deobf.Oaktree;
-import de.geolykt.starloader.deobf.access.AccessTransformInfo;
-import de.geolykt.starloader.deobf.access.AccessWidenerReader;
 import de.geolykt.starloader.deobf.remapper.Remapper;
 import de.geolykt.starloader.ras.AbstractTinyRASRemapper;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext;
@@ -58,7 +56,6 @@ import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformScope
 import de.geolykt.starplane.remapping.MultiMappingProvider;
 import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
 import de.geolykt.starplane.remapping.StarplaneMappingsProvider;
-import de.geolykt.starplane.remapping.TRAccessWidenerRemapper;
 
 public class ObfuscationHandler {
 
@@ -66,9 +63,6 @@ public class ObfuscationHandler {
     private static final String STARMAP_FILE_NAME = "spstarmap.tiny";
     private static final byte[] IO_BUFFER = new byte[4096];
     private static final Logger LOGGER = LoggerFactory.getLogger(ObfuscationHandler.class);
-
-    @Nullable
-    private final String accessWidenerContent;
 
     @Nullable
     private final String rasContent;
@@ -81,10 +75,9 @@ public class ObfuscationHandler {
     @NotNull
     private final Path projectDir;
 
-    public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String accessWidenerContent, @Nullable String rasContent) {
+    public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String rasContent) {
         this.cacheDir = cacheDir;
         this.projectDir = projectDir;
-        this.accessWidenerContent = accessWidenerContent;
         this.rasContent = rasContent;
     }
 
@@ -102,27 +95,6 @@ public class ObfuscationHandler {
         boolean recomputeAw = false;
         String currentHash = null;
 
-        final AccessTransformInfo atInfo;
-        String accessWidenerContent = this.accessWidenerContent; // Eclipse has a hard time figuring out the meaning of `final`.
-
-        if (accessWidenerContent == null) {
-            atInfo = null;
-        } else {
-            try (InputStream is = new ByteArrayInputStream(accessWidenerContent.getBytes(StandardCharsets.UTF_8))) {
-                MessageDigest digest = MessageDigest.getInstance("SHA-1");
-                try (DigestInputStream in = new DigestInputStream(is, digest)) {
-                    atInfo = new AccessTransformInfo();
-                    try (AccessWidenerReader awr = new AccessWidenerReader(atInfo, in, false)) {
-                        awr.readHeader();
-                        while (awr.readLn());
-                    }
-                    currentHash = toHexHash(digest.digest());
-                }
-            } catch (Exception e) {
-                throw new IllegalStateException("Unable to read accesswidener!", e);
-            }
-        }
-
         final ReversibleAccessSetterContext rasInfo;
         String rasContent = this.rasContent;
 
@@ -133,11 +105,7 @@ public class ObfuscationHandler {
                     BufferedReader br = new BufferedReader(new InputStreamReader(din))) {
                 rasInfo = new ReversibleAccessSetterContext(RASTransformScope.BUILDTIME, false);
                 rasInfo.read("<mod>", br, false);
-                if (currentHash == null) {
-                    currentHash = toHexHash(din.getMessageDigest().digest());
-                } else {
-                    currentHash = "-" + toHexHash(din.getMessageDigest().digest());
-                }
+                currentHash = toHexHash(din.getMessageDigest().digest());
             } catch (Exception e) {
                 throw new IllegalStateException("Unable to read reversibleAccessSetter!", e);
             }
@@ -161,7 +129,7 @@ public class ObfuscationHandler {
                 e.printStackTrace();
                 recomputeAw = true;
             }
-        } else if (atInfo != null) {
+        } else if (rasInfo != null) {
             recomputeAw = true; // AW file newly created
         }
 
@@ -197,7 +165,7 @@ public class ObfuscationHandler {
         }
         LOGGER.info("Using the base galimulator jar found at " + cleanGalimJar.getAbsolutePath());
 
-        File map = this.cacheDir.resolve(INTERMEDIARY_FILE_NAME).toFile();
+        Path map = this.cacheDir.resolve(INTERMEDIARY_FILE_NAME);
         Oaktree deobfuscator = new Oaktree();
         try {
             long start = System.currentTimeMillis();
@@ -300,7 +268,7 @@ public class ObfuscationHandler {
 
             LOGGER.info("Computed intermediaries of classes in " + (System.currentTimeMillis() - startIntermediarisation) + " ms.");
 
-            if (atInfo == null && rasInfo == null) {
+            if (rasInfo == null) {
                 try (OutputStream os = Files.newOutputStream(compileAccess)) {
                     assert os != null;
                     deobfuscator.write(os, cleanGalimJar.toPath());
@@ -321,27 +289,19 @@ public class ObfuscationHandler {
 
                 for (ClassNode node : deobfuscator.getClassNodesDirectly()) {
                     // Apply RAS
-                    if (rasInfo != null) {
-                        try {
-                            rasInfo.accept(node);
-                        } catch (RASTransformFailure e) {
-                            LOGGER.error("Unable to apply RAS on class {}", node.name, e);
+                    try {
+                        if (node == null) {
+                            continue;
                         }
+                        rasInfo.accept(node);
+                    } catch (RASTransformFailure e) {
+                        LOGGER.error("Unable to apply RAS on class {}", node.name, e);
                     }
 
                     ClassNode duplicate = new ClassNode();
                     node.accept(duplicate);
                     runNodes.add(duplicate);
                     compileNodes.put(node.name, node);
-                    // Apply runtime AWs
-                    if (atInfo != null) {
-                        atInfo.apply(duplicate, true);
-                    }
-                }
-
-                // Apply compile-time AWs
-                if (atInfo != null) {
-                    atInfo.apply(compileNodes, LOGGER::error);
                 }
 
                 try (BufferedWriter bw = Files.newBufferedWriter(awHash, StandardCharsets.UTF_8)) {
@@ -456,7 +416,6 @@ public class ObfuscationHandler {
             // TR is very strange. Why does it not accept class nodes?
             tinyRemapper.readInputs(jarPath);
             tinyRemapper.readClassPath(starmappedGalimulator);
-            outputConsumer.addNonClassFiles(jarPath, tinyRemapper, Arrays.asList(new TRAccessWidenerRemapper()));
             outputConsumer.addNonClassFiles(jarPath, tinyRemapper, Arrays.asList(new AbstractTinyRASRemapper() {
                 @Override
                 public boolean canTransform(TinyRemapper remapper, Path relativePath) {
@@ -478,7 +437,7 @@ public class ObfuscationHandler {
     public boolean equals(Object obj) {
         if (obj instanceof ObfuscationHandler) {
             ObfuscationHandler other = (ObfuscationHandler) obj;
-            return Objects.equal(this.accessWidenerContent, other.accessWidenerContent)
+            return Objects.equal(this.rasContent, other.rasContent)
                     && this.cacheDir.equals(other.cacheDir)
                     && this.projectDir.equals(other.projectDir);
         }
@@ -487,6 +446,6 @@ public class ObfuscationHandler {
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(this.accessWidenerContent, this.cacheDir, this.projectDir);
+        return Objects.hashCode(this.rasContent, this.cacheDir, this.projectDir);
     }
 }

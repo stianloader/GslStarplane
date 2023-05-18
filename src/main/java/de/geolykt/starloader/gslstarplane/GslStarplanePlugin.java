@@ -125,7 +125,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
         Path altCache = project.getBuildDir().toPath().resolve("gsl-starplane");
 
         GslExtension extension = project.getExtensions().getByType(GslExtension.class);
-        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getAccessWidenerContents(project), extension.getRASContents(project));
+        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getRASContents(project));
         OBF_HANDLERS.put(project, oHandler);
         resolve(project, oHandler);
         JavaExec runTask = RUN_TASKS.get(project);
