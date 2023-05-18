@@ -126,38 +126,43 @@ configurations {
 
 in the project buildscript.
 
-## The `remap` task
+## The `remapJar` task
 
-The `remap` task remaps all references of deobfuscated members to use
+The `remapJar` task remaps all references of deobfuscated members to use
 the obfuscated names instead. It produces the jar that can be used outside
 the development environment and which you can freely distribute
 (should there not be other limitations).
 
-The `remap` task extends the `jar` task, which means that it can
+The `remapJar` task extends the `jar` task, which means that it can
 be configured similar to `jar`. However, unlike the `jar` task
 you probably want to define the `from` inputs.
 
 Note: It is recommended to set the `archiveClassifier` of the
 remapped jar as otherwise the `jar` task cannot be cached.
 
-The recommended configuration of the `remap` task is follows:
+**Warning:** Including a jar will insert the jar in the built jar root.
+This is probably not intended behaviour for you, so you'd need to decompress
+is beforehand.
+
+The recommended configuration of the `remapJar` task is follows:
 
 ```groovy
-remap {
+remapJar {
     archiveClassifier = 'remapped'
-    dependsOn jar
-    from jar
+    dependsOn classes
+    from jar.getSource()
 }
 ```
 
 Sometimes muscle memory gets the better of you and you are still
 acustomed to using `build` to create jars. Unfortunately, by default, `build`
 does not create a remapped jar. In order for the `build` task to also remap,
-one can make `build` depend on `remap`. In practice this would look as follows:
+one can make `build` depend on `remapJar`. In practice this would look as
+follows:
 
 ```groovy
 build {
-    dependsOn remap
+    dependsOn remapJar
 }
 ```
 

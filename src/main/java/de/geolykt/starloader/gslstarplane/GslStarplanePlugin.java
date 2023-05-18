@@ -66,7 +66,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
         project.getExtensions().create(GslExtension.class, "starplane", GslExtension.class);
         project.afterEvaluate(GslStarplanePlugin::runDeobf);
         project.afterEvaluate(GslStarplanePlugin::setupEEA);
-        project.getTasks().create("remap", GslRemapTask.class, (task) -> {
+        project.getTasks().create("remapJar", GslRemapJarTask.class, (task) -> {
             task.setDescription("Remap deobfuscated jars to use obfuscated mappings.");
             task.setGroup(TASK_GROUP);
         });

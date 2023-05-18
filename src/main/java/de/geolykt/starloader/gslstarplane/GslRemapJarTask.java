@@ -12,14 +12,14 @@ import org.gradle.work.DisableCachingByDefault;
 import de.geolykt.starplane.ObfuscationHandler;
 
 @DisableCachingByDefault(because = "Not worth caching") // Gradle does this with the standard Jar task. But is this really the case?
-public class GslRemapTask extends Jar {
+public class GslRemapJarTask extends Jar {
 
     @Override
     protected CopyAction createCopyAction() {
         return (CopyActionProcessingStream caps) -> {
             {
                 // Build the base jar
-                WorkResult result = GslRemapTask.super.createCopyAction().execute(caps);
+                WorkResult result = super.createCopyAction().execute(caps);
                 if (!result.getDidWork()) {
                     return result;
                 }
