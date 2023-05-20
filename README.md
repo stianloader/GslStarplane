@@ -157,8 +157,9 @@ Aside from `String` (which is used in the above example) other types can be used
 A complete list of supported types is as follows:
 
  - `PublishArtifact`
- - `Jar` tasks
+ - `AbstractArchiveTask` tasks (includes `Jar` tasks)
  - `DefaultAdhocSoftwareComponent` components
+ - `Configuration`s
  - `String`, `File`, `Path` and all other types that can be converted to `File`
    as per [Project#file](https://docs.gradle.org/8.1/javadoc/org/gradle/api/Project.html#file-java.lang.Object-).
 
@@ -167,19 +168,35 @@ Starloader-launcher extensions) will get copied into the extension directory.
 All mods with the same id/name that already exist in the extension directory
 will get removed in order to avoid duplicates.
 
-During the copy process the starplane annotations will get evaluated and
-their access wideners are also accordingly transformed.
-
-**WARNING:** External mods (as in those residing in maven repos) are not yet
-fully supported. However, this will change in the future.
-
-**WARNING:** Access wideners from other mods might not get correctly applied.
-Further investigation is needed (there seems to be a flaw in how we deal
-with runtime vs compiletime galimulator jars).
+During the copy process the starplane annotations will get evaluated.
 
 **WARNING:** Removing a mod from the `deployMods` list will not remove them
 from the extensions folder yet. This may get changed should there be sufficent
 momentuum.
+
+Reversible access setters from other mods ("transitive reversible access
+setters") are not applied at compile-time, but are applied as usual at
+runtime.
+
+In order add external mods via maven, the following approach can be used:
+
+```groovy
+// Note: The order of the "configurations" block matters - it should be over the "deployMods" block.
+configurations {
+    dependencyMods // Define the "dependencyMods" configuration so it can be used
+    compileOnlyApi.extendsFrom(dependencyMods) // Also add all deployed mods to the compile classpath
+}
+
+deployMods {
+    // Tell starplane to deploy all mods from the "dependencyMods" configuration
+    from configurations["dependencyMods"]
+}
+
+dependencies {
+    // Add the mod to the configuration (you can also add several mods to the same configuration)
+    dependencyMods "de.geolykt:starloader-api:2.0.0-SNAPSHOT"
+}
+```
 
 ## Running the development environment
 
@@ -223,7 +240,7 @@ for the dev env to work. The Starloader Launcher can thus be declared as follows
 ```groovy
 dependencies {
     // [...]
-    devRuntime "de.geolykt.starloader:launcher:4.0.0-20230514"
+    devRuntime "de.geolykt.starloader:launcher:4.0.0-20230520"
     // [...]
 }
 ```

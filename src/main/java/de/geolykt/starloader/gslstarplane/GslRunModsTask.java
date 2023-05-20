@@ -31,6 +31,7 @@ public class GslRunModsTask extends JavaExec {
 
     public GslRunModsTask() {
         super.dependsOn("deployMods");
+        super.dependsOn("jar");
         super.setDescription("Run the development environment.");
         super.setGroup(GslStarplanePlugin.TASK_GROUP);
         super.getMainClass().set("de.geolykt.starloader.launcher.IDELauncher");

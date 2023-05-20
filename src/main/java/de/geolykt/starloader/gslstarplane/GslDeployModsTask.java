@@ -19,6 +19,7 @@ import java.util.zip.ZipInputStream;
 
 import org.gradle.api.Task;
 import org.gradle.api.UncheckedIOException;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.component.SoftwareComponent;
 import org.gradle.api.internal.ConventionTask;
@@ -27,7 +28,7 @@ import org.gradle.api.plugins.internal.DefaultAdhocSoftwareComponent;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.TaskAction;
-import org.gradle.jvm.tasks.Jar;
+import org.gradle.api.tasks.bundling.AbstractArchiveTask;
 import org.gradle.work.DisableCachingByDefault;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
@@ -63,7 +64,6 @@ public class GslDeployModsTask extends ConventionTask {
     public List<@NotNull Path> getModPaths() {
         Set<@NotNull Path> out = new LinkedHashSet<>();
         for (Object modJar : this.modJars) {
-            getLogger().info("Looking at " + modJar);
             if (modJar instanceof SoftwareComponent) {
                 if (!(modJar instanceof DefaultAdhocSoftwareComponent)) {
                     throw new IllegalStateException("Only implementations of SoftwareComponent that are an instance of DefaultAdhocSoftwareComponent can be used as a mod jar.");
@@ -81,13 +81,16 @@ public class GslDeployModsTask extends ConventionTask {
                 }
             } else if (modJar instanceof PublishArtifact) {
                 out.add(((PublishArtifact) modJar).getFile().toPath());
-            } else if (modJar instanceof Jar) {
-                out.add(((Jar) modJar).getArchiveFile().get().getAsFile().toPath());
+            } else if (modJar instanceof AbstractArchiveTask) {
+                out.add(((AbstractArchiveTask) modJar).getArchiveFile().get().getAsFile().toPath());
+            } else if (modJar instanceof Configuration) {
+                for (File resolvedEntry : ((Configuration) modJar).resolve()) {
+                    out.add(resolvedEntry.toPath());
+                }
             } else {
                 out.add(super.getProject().file(modJar).toPath());
             }
         }
-        getLogger().info("Potential mods path: " + out);
         return new ArrayList<>(out);
     }
 
