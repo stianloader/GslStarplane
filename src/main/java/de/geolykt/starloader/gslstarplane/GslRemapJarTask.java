@@ -1,18 +1,38 @@
 package de.geolykt.starloader.gslstarplane;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
 
+import org.gradle.api.Task;
+import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.file.copy.CopyAction;
 import org.gradle.api.internal.file.copy.CopyActionProcessingStream;
 import org.gradle.api.tasks.WorkResult;
 import org.gradle.api.tasks.WorkResults;
 import org.gradle.api.tasks.bundling.Jar;
 import org.gradle.work.DisableCachingByDefault;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import de.geolykt.starplane.ObfuscationHandler;
 
 @DisableCachingByDefault(because = "Not worth caching") // Gradle does this with the standard Jar task. But is this really the case?
 public class GslRemapJarTask extends Jar {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(GslRemapJarTask.class);
+    private final Set<Object> fromJars = new HashSet<>();
+
+    public void fromJar(Object... notations) {
+        for (Object notation : notations) {
+            if (notation instanceof Task) {
+                super.dependsOn(notation);
+            }
+            this.fromJars.add(notation);
+        }
+    }
 
     @Override
     protected CopyAction createCopyAction() {
@@ -26,16 +46,28 @@ public class GslRemapJarTask extends Jar {
             }
             ObfuscationHandler oHandler = GslStarplanePlugin.OBF_HANDLERS.get(super.getProject());
             if (oHandler == null) {
-                super.getLogger().error("Obfuscation handler not set for this project: " + super.getProject().getName());
+                LOGGER.error("Obfuscation handler not set for this project: " + super.getProject().getName());
                 return WorkResults.didWork(false);
             }
 
+            Set<@NotNull Path> includes = new HashSet<>();
+            for (Object fromJar : this.fromJars) {
+                if (fromJar instanceof Task) {
+                    FileCollection taskOutputs = ((Task) fromJar).getOutputs().getFiles();
+                    taskOutputs.forEach(f -> {
+                        includes.add(f.toPath());
+                    });
+                } else {
+                    includes.add(super.getProject().file(fromJar).toPath());
+                }
+            }
+
             try {
-                super.getLogger().info("Remapping...");
-                oHandler.reobfuscateJar(super.getArchiveFile().get().getAsFile().toPath(), oHandler.getTransformedGalimulatorJar());
-                super.getLogger().info("Remap complete.");
+                LOGGER.info("Remapping");
+                oHandler.reobfuscateJar(super.getArchiveFile().get().getAsFile().toPath(), oHandler.getTransformedGalimulatorJar(), includes);
+                LOGGER.info("Remap complete");
             } catch (IOException e) {
-                super.getLogger().error("Unable to remap", e);
+                LOGGER.error("Unable to remap", e);
                 return WorkResults.didWork(false);
             }
 

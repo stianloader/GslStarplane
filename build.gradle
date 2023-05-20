@@ -22,7 +22,7 @@ repositories {
 }
 
 dependencies {
-    implementation "de.geolykt.starloader:sl-deobf:0.1.0"
+    implementation "de.geolykt.starloader:sl-deobf:0.1.1"
     implementation "de.geolykt.starloader:reversible-access-setter:1.0.0"
     implementation gradleApi()
     implementation "org.ow2.asm:asm:9.5"

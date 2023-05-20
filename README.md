@@ -6,8 +6,9 @@ galimulator modding.
 
 ## Including the plugin
 
-**WARNING:** When publishing your code online you should make extra sure to NOT
-include the `build` directory. GslStarplane pushes deobfuscated jars to it.
+**WARNING:** When publishing your code online with this plugin enabled, you
+should make extra sure to NOT include the `build` directory. GslStarplane
+pushes deobfuscated jars which have a copyright on them to it.
 
 GslStarplane functions as a gradle plugin, so it first needs to be applied on a
 gradle project in order to work. Under groovy you can do it by adding
@@ -111,17 +112,18 @@ you probably want to define the `from` inputs.
 Note: It is recommended to set the `archiveClassifier` of the
 remapped jar as otherwise the `jar` task cannot be cached.
 
-**Warning:** Including a jar will insert the jar in the built jar root.
+Including a jar will insert the jar in the built jar root.
 This is probably not intended behaviour for you, so you'd need to decompress
-is beforehand.
+is beforehand. Alternatively, the `fromJar` method can be used to include
+jars. Furthermore, `fromJar` implicitly adds dependencies on Tasks if the input
+is a task. The below example shows just that.
 
 The recommended configuration of the `remapJar` task is follows:
 
 ```groovy
 remapJar {
     archiveClassifier = 'remapped'
-    dependsOn classes
-    from jar.getSource()
+    fromJar jar
 }
 ```
 
@@ -221,7 +223,7 @@ for the dev env to work. The Starloader Launcher can thus be declared as follows
 ```groovy
 dependencies {
     // [...]
-    devRuntime "de.geolykt.starloader:launcher:4.0.0-20230513"
+    devRuntime "de.geolykt.starloader:launcher:4.0.0-20230514"
     // [...]
 }
 ```

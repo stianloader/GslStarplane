@@ -18,10 +18,10 @@ import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.jar.JarFile;
@@ -49,7 +49,6 @@ import de.geolykt.starloader.deobf.IntermediaryGenerator;
 import de.geolykt.starloader.deobf.MethodReference;
 import de.geolykt.starloader.deobf.Oaktree;
 import de.geolykt.starloader.deobf.remapper.Remapper;
-import de.geolykt.starloader.ras.AbstractTinyRASRemapper;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformFailure;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformScope;
@@ -395,7 +394,8 @@ public class ObfuscationHandler {
         }
     }
 
-    public void reobfuscateJar(@NotNull Path jarPath, @NotNull Path starmappedGalimulator) throws IOException {
+    public void reobfuscateJar(@NotNull Path jarPath, @NotNull Path starmappedGalimulator,
+            @NotNull Collection<@NotNull Path> alsoInclude) throws IOException {
         Path spstarmap = this.cacheDir.resolve(STARMAP_FILE_NAME);
         Path slintermediary = this.cacheDir.resolve(INTERMEDIARY_FILE_NAME);
 
@@ -413,15 +413,13 @@ public class ObfuscationHandler {
         Path intermediaryBuild = this.cacheDir.resolve("temporaryBuild.jar");
         try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(intermediaryBuild).build()) {
             LOGGER.info("Reobfuscating... (reading inputs)");
-            // TR is very strange. Why does it not accept class nodes?
             tinyRemapper.readInputs(jarPath);
             tinyRemapper.readClassPath(starmappedGalimulator);
-            outputConsumer.addNonClassFiles(jarPath, tinyRemapper, Arrays.asList(new AbstractTinyRASRemapper() {
-                @Override
-                public boolean canTransform(TinyRemapper remapper, Path relativePath) {
-                    return relativePath.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ras");
-                }
-            }));
+            outputConsumer.addNonClassFiles(jarPath, tinyRemapper, Collections.singletonList(SimpleRASRemapper.INSTANCE));
+            for (Path additionalInput : alsoInclude) {
+                tinyRemapper.readInputs(additionalInput);
+                outputConsumer.addNonClassFiles(additionalInput, tinyRemapper, Collections.singletonList(SimpleRASRemapper.INSTANCE));
+            }
             LOGGER.info("Reobfuscating... (applying)");
             tinyRemapper.apply(outputConsumer);
         } catch (IOException t) {
