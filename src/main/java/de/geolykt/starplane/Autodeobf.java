@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.jetbrains.annotations.NotNull;
@@ -99,6 +100,7 @@ public class Autodeobf implements StarmappedNames {
     private static final String STAR_CLASS = "snoddasmannen/galimulator/Star";
     private static final String STAR_NATIVES_CLASS = "snoddasmannen/galimulator/Native";
     private static final String STATE_ACTOR_CLASS = "snoddasmannen/galimulator/actors/StateActor";
+    private static final String WAR_CLASS = BASE_PACKAGE + "War";
     private static final String WIDGET_CLASS = "snoddasmannen/galimulator/ui/Widget";
     private static final String WIDGET_MESSAGE_CLASS = WIDGET_CLASS + "$WIDGET_MESSAGE";
     private static final String WIDGET_POSITIONING_CLASS = WIDGET_CLASS + "$WIDGET_POSITIONING";
@@ -167,6 +169,19 @@ public class Autodeobf implements StarmappedNames {
         innerNode.outerClass = outerClass.name;
         innerNode.outerMethod = outerMethod.name;
         innerNode.outerMethodDesc = outerMethod.desc;
+    }
+
+    private void assignAsInnerClass(ClassNode outerNode, ClassNode innerNode, String name) {
+        InnerClassNode icn = new InnerClassNode(innerNode.name, outerNode.name, name, innerNode.access & ~Opcodes.ACC_SUPER);
+
+        outerNode.innerClasses.removeIf(innerClassNode -> innerClassNode.name.equals(innerNode.name));
+        outerNode.innerClasses.add(icn);
+        innerNode.innerClasses.removeIf(innerClassNode -> innerClassNode.name.equals(innerNode.name));
+        innerNode.innerClasses.add(icn);
+
+        outerNode.outerClass = null;
+        outerNode.outerMethod = null;
+        outerNode.outerMethodDesc = null;
     }
 
     public boolean contentsEqual(MethodNode method, AbstractInsnNode... instructions) {
@@ -244,6 +259,18 @@ public class Autodeobf implements StarmappedNames {
         insn = insn.getNext();
         while (insn != null && insn.getOpcode() != matchOpcode) {
             insn = insn.getNext();
+        }
+        return (T) insn;
+    }
+
+    @SuppressWarnings("all")
+    private <T extends AbstractInsnNode> T getPreviousOrNull(@Nullable AbstractInsnNode insn, int matchOpcode) {
+        if (insn == null) {
+            return (T) null;
+        }
+        insn = insn.getPrevious();
+        while (insn != null && insn.getOpcode() != matchOpcode) {
+            insn = insn.getPrevious();
         }
         return (T) insn;
     }
@@ -602,13 +629,13 @@ public class Autodeobf implements StarmappedNames {
             resolveEnumMemberNames(SETTINGS_TYPE_CLASS, settingsTypeMemberNames);
         }
 
-        remapClass(mappingsStream, settingsDialogClass, SETTINGS_DIALOG);
+        remapClass(mappingsStream, settingsDialogClass, SETTINGS_DIALOG_CLASS);
         ClassNode settingsDialog = name2Node.get(settingsDialogClass);
         if (settingsDialog == null) {
-            throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG, "*");
+            throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CLASS, "*");
         }
         if (settingsDialog.interfaces.size() != 1) {
-            throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG, "*", "unexpected amount of interfaces");
+            throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CLASS, "*", "unexpected amount of interfaces");
         }
         remapClass(mappingsStream, settingsDialog.interfaces.get(0), DIALOG_INTERFACE);
 
@@ -628,18 +655,18 @@ public class Autodeobf implements StarmappedNames {
                         if (ldcInsn.cst.equals("Simulation")) {
                             AbstractInsnNode nextInsn = getNext(ldcInsn);
                             if (nextInsn.getOpcode() != Opcodes.INVOKESPECIAL) {
-                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_BLACKLIST_BUTTON, "*", "Unexpected opcode");
+                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_BLACKLIST_BUTTON_CLASS, "*", "Unexpected opcode");
                             }
                             MethodInsnNode methodInsn = (MethodInsnNode) nextInsn;
                             if (!methodInsn.name.equals("<init>")) {
-                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_BLACKLIST_BUTTON, "*", "Logic error");
+                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_BLACKLIST_BUTTON_CLASS, "*", "Logic error");
                             }
                             blacklistButtonClass = methodInsn.owner;
 
-                            remapClass(mappingsStream, blacklistButtonClass, SETTINGS_DIALOG_BLACKLIST_BUTTON);
+                            remapClass(mappingsStream, blacklistButtonClass, SETTINGS_DIALOG_BLACKLIST_BUTTON_CLASS);
                             ClassNode blacklistButton = name2Node.get(blacklistButtonClass);
                             if (blacklistButton == null) {
-                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_BLACKLIST_BUTTON, "*", "Unresolved node");
+                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_BLACKLIST_BUTTON_CLASS, "*", "Unresolved node");
                             }
                             assignAsAnonymousClass(settingsDialog, method, blacklistButtonClass);
 
@@ -721,18 +748,18 @@ public class Autodeobf implements StarmappedNames {
                         if (fieldInsn.owner.equals(SETTINGS_TYPE_CLASS)
                                 && settingsTypeMemberNames.getOrDefault(fieldInsn.name, "").equals("BOOLEAN")) {
                             if (labeledCheckboxComponent != null) {
-                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CHECKBOX, "*", "Collision");
+                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CHECKBOX_CLASS, "*", "Collision");
                             }
                             AbstractInsnNode previousInsn = fieldInsn.getPrevious();
                             if (previousInsn.getOpcode() != Opcodes.GETFIELD) {
-                                throw new OutdatedDeobfuscatorException("Dialog", USER_SETTING_ENTRY, "*", "Unexpected opcode");
+                                throw new OutdatedDeobfuscatorException("Dialog", USER_SETTING_ENTRY_CLASS, "*", "Unexpected opcode");
                             }
                             FieldInsnNode getTypeInsn = (FieldInsnNode) previousInsn;
                             if (!getTypeInsn.desc.equals("L" + SETTINGS_TYPE_CLASS + ";")) {
-                                throw new OutdatedDeobfuscatorException("Dialog", USER_SETTING_ENTRY, "type", "Unexpected descriptor");
+                                throw new OutdatedDeobfuscatorException("Dialog", USER_SETTING_ENTRY_CLASS, "type", "Unexpected descriptor");
                             }
                             remapField(mappingsStream, getTypeInsn.owner, getTypeInsn.name, "type", "L" + SETTINGS_TYPE_CLASS + ";");
-                            remapClass(mappingsStream, getTypeInsn.owner, USER_SETTING_ENTRY);
+                            remapClass(mappingsStream, getTypeInsn.owner, USER_SETTING_ENTRY_CLASS);
 
                             AbstractInsnNode nextInsn = fieldInsn.getNext();
                             while (nextInsn != null && nextInsn.getOpcode() != Opcodes.NEW) {
@@ -740,15 +767,15 @@ public class Autodeobf implements StarmappedNames {
                             }
 
                             if (nextInsn == null) {
-                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CHECKBOX, "*", "Instructions exhausted");
+                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CHECKBOX_CLASS, "*", "Instructions exhausted");
                             }
                             TypeInsnNode newInsn = (TypeInsnNode) nextInsn;
                             String settingsCheckbox = newInsn.desc;
-                            remapClass(mappingsStream, settingsCheckbox, SETTINGS_DIALOG_CHECKBOX);
+                            remapClass(mappingsStream, settingsCheckbox, SETTINGS_DIALOG_CHECKBOX_CLASS);
 
                             ClassNode settingsCheckboxNode = name2Node.get(settingsCheckbox);
                             if (settingsCheckboxNode == null) {
-                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CHECKBOX, "*", "Unresolved node");
+                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CHECKBOX_CLASS, "*", "Unresolved node");
                             }
                             labeledCheckboxComponent = settingsCheckboxNode.superName;
                             if (labeledCheckboxComponent == null) {
@@ -766,20 +793,20 @@ public class Autodeobf implements StarmappedNames {
                             }
 
                             if (nextInsn == null) {
-                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_STRING_CHOOSER, "*", "Instructions exhausted");
+                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_STRING_CHOOSER_CLASS, "*", "Instructions exhausted");
                             }
                             TypeInsnNode newInsn = (TypeInsnNode) nextInsn;
 
                             ClassNode stringChooserSubclassNode = name2Node.get(newInsn.desc);
                             if (stringChooserSubclassNode == null) {
-                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_STRING_CHOOSER, "*", "Unresolved node");
+                                throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_STRING_CHOOSER_CLASS, "*", "Unresolved node");
                             }
                             labeledStringChooserComponent = stringChooserSubclassNode.superName;
                             if (labeledStringChooserComponent == null) {
                                 throw new IllegalStateException(stringChooserSubclassNode.name + " without superclass");
                             }
                             remapClass(mappingsStream, labeledStringChooserComponent, LABELED_STRING_CHOOSER_COMPONENT);
-                            remapClass(mappingsStream, newInsn.desc, SETTINGS_DIALOG_STRING_CHOOSER);
+                            remapClass(mappingsStream, newInsn.desc, SETTINGS_DIALOG_STRING_CHOOSER_CLASS);
                             assignAsAnonymousClass(settingsDialog, method, newInsn.desc);
                         }
                     }
@@ -789,7 +816,7 @@ public class Autodeobf implements StarmappedNames {
         }
 
         if (blacklistButtonClass == null) {
-            throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_BLACKLIST_BUTTON, "*", "Unresolved");
+            throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_BLACKLIST_BUTTON_CLASS, "*", "Unresolved");
         }
         if (dialogButtonOnTouchMethod == null) {
             throw new OutdatedDeobfuscatorException("Dialog", DIALOG_BUTTON_CLASS, "onTouch", "Unresolved");
@@ -2430,7 +2457,7 @@ public class Autodeobf implements StarmappedNames {
         String galimulatorTextInputDialogClass = null;
         String saveAsyncMethod = null;
         String saveSyncMethod = null;
-        String logicalTickMethod = null;
+        MethodNode logicalTickMethod = null;
         String getStateActorCreatorsMethod = null;
         String setupBackgroundEffectsMethod = null;
         spaceLogicalTickMethodName = null;
@@ -2500,7 +2527,7 @@ public class Autodeobf implements StarmappedNames {
                         if (logicalTickMethod != null) {
                             throw new OutdatedDeobfuscatorException("Space", "Space", "tick", "Collision");
                         }
-                        logicalTickMethod = method.name;
+                        logicalTickMethod = method;
                     }
                 }
             } else if (method.desc.equals("(Ljava/lang/String;)Z")) {
@@ -2620,6 +2647,10 @@ public class Autodeobf implements StarmappedNames {
             }
         }
 
+        String warsField = fieldRemaps.entrySet().stream().filter((e) -> e.getValue().equals("wars")).findFirst().map((e) -> {
+            return e.getKey().substring(0, e.getKey().indexOf(' '));
+        }).get();
+
         if (loadMethod == null) {
             throw new IllegalStateException("Unable to locate Space#loadState method.");
         }
@@ -2656,10 +2687,10 @@ public class Autodeobf implements StarmappedNames {
 
         remapMethod(mappingsStream, SPACE_CLASS, saveAsyncMethod, "saveAsync", "(Ljava/lang/String;Ljava/lang/String;)V");
         remapMethod(mappingsStream, SPACE_CLASS, saveSyncMethod, "saveSync", "(Ljava/lang/String;Ljava/lang/String;)V");
-        remapMethod(mappingsStream, SPACE_CLASS, logicalTickMethod, "tick", "()I");
+        remapMethod(mappingsStream, SPACE_CLASS, logicalTickMethod.name, "tick", "()I");
         remapMethod(mappingsStream, SPACE_CLASS, getStateActorCreatorsMethod, "getStateActorCreators", "()Ljava/util/List;");
         remapMethod(mappingsStream, SPACE_CLASS, setupBackgroundEffectsMethod, "setupBackgroundEffects", "()V");
-        spaceLogicalTickMethodName = logicalTickMethod;
+        spaceLogicalTickMethodName = logicalTickMethod.name;
 
         this.textInputDialogWidgetClass = galimulatorTextInputDialogClass;
 
@@ -2843,6 +2874,8 @@ public class Autodeobf implements StarmappedNames {
         }
 
         String pausedField = null;
+        String signPeaceMethod = null;
+
         for (MethodNode method : space.methods) {
             if (method.name.equals(pauseMethod) && method.desc.equals("(Z)V")) {
                 AbstractInsnNode pauseMethodInsn = method.instructions.getFirst();
@@ -2876,12 +2909,46 @@ public class Autodeobf implements StarmappedNames {
                     }
                     pauseMethodInsn = pauseMethodInsn.getNext();
                 }
+            } else if (method.desc.equals("(L" + EMPIRE_CLASS + ";L" + EMPIRE_CLASS + ";)V")) {
+                insn = method.instructions.getFirst();
+                LdcInsnNode ldcInsn = getNextOrNull(insn, Opcodes.LDC);
+                if (ldcInsn == null || !ldcInsn.cst.equals("Signed PEACE with ")) {
+                    continue;
+                }
+                if (signPeaceMethod != null) {
+                    throw new OutdatedDeobfuscatorException("Space", "Space", "signPeace", "Collision");
+                }
+                signPeaceMethod = method.name;
+                MethodInsnNode methodInsn = getNext(insn, Opcodes.INVOKEVIRTUAL);
+                if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";)V")) {
+                    throw new OutdatedDeobfuscatorException("Space", EMPIRE_CLASS, "addPeaceAgreement", "Unexpected desc or owner");
+                }
+                remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "addPeaceAgreement", "(L" + EMPIRE_CLASS + ";)V");
+                methodInsn = Objects.requireNonNull(getPreviousOrNull(ldcInsn, Opcodes.INVOKEVIRTUAL), "Null insn");
+                if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("()Z")) {
+                    throw new OutdatedDeobfuscatorException("Space", EMPIRE_CLASS, "isNotable", "Unexpected desc or owner");
+                }
+                remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "isNotable", "()Z");
+                methodInsn = (MethodInsnNode) getNext(ldcInsn, Opcodes.ALOAD).getNext();
+                if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("()Ljava/lang/String;")) {
+                    throw new OutdatedDeobfuscatorException("Space", EMPIRE_CLASS, "getDisplayName", "Unexpected desc or owner");
+                }
+                remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "getDisplayName", "()Ljava/lang/String;");
+                methodInsn = getNext(methodInsn, Opcodes.INVOKESTATIC);
+                if (!methodInsn.owner.equals(SPACE_CLASS)) {
+                    throw new OutdatedDeobfuscatorException("Space", SPACE_CLASS, "postBulletin", "Unexpected owner");
+                }
+                remapMethod(mappingsStream, SPACE_CLASS, methodInsn.name, "postBulletin", methodInsn.desc);
             }
         }
 
         if (pausedField == null) {
             throw new OutdatedDeobfuscatorException("Space", "Space", "paused");
         }
+        if (signPeaceMethod == null) {
+            throw new OutdatedDeobfuscatorException("Space", "Space", "signPeace", "Unresolved");
+        }
+        remapMethod(mappingsStream, SPACE_CLASS, signPeaceMethod, "signPeace", "(L" + EMPIRE_CLASS + ";L" + EMPIRE_CLASS + ";)V");
 
         boolean foundIsPaused = false;
         for (MethodNode method : space.methods) {
@@ -2932,6 +2999,330 @@ public class Autodeobf implements StarmappedNames {
 
         if (!foundSaveStackdepth) {
             throw new OutdatedDeobfuscatorException("Space", SPACE_CLASS, "saveStackdepth", "outright missing");
+        }
+
+        ClassNode warListWidgetNode = null;
+        String warListEntryClass = null;
+        String warListWidgetPopulateMethod = null;
+        String paginatedWidgetClass = null;
+        String getWarNameMethod = null;
+        String getWarDisplayScoreMethod = null;
+        String getWarDisplayAgeMethod = null;
+        String widgetGetInnerWidthMethod = null;
+
+        nodeLoop:
+        for (ClassNode node : nodes) {
+            if (!node.name.startsWith(UI_PACKAGE)) {
+                continue;
+            }
+            for (MethodNode method : node.methods) {
+                if (!method.desc.equals("()V")) {
+                    continue;
+                }
+                for (insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                    if (insn.getOpcode() != Opcodes.GETSTATIC) {
+                        continue;
+                    }
+                    FieldInsnNode fieldInsn = (FieldInsnNode) insn;
+                    if (!fieldInsn.name.equals(warsField)
+                            || !fieldInsn.owner.equals(SPACE_CLASS)
+                            || !fieldInsn.desc.equals("Ljava/util/Vector;")) {
+                        continue;
+                    }
+                    if (warListWidgetNode != null) {
+                        throw new OutdatedDeobfuscatorException("Space", WAR_LIST_WIDGET_CLASS, "*", "Collision");
+                    }
+                    warListWidgetNode = node;
+                    warListWidgetPopulateMethod = method.name;
+                    while ((insn = insn.getNext()) != null) {
+                        if (insn.getOpcode() != Opcodes.NEW) {
+                            continue;
+                        }
+                        warListEntryClass = ((TypeInsnNode) insn).desc;
+                        insn = insn.getNext();
+                        break;
+                    }
+                    while (insn != null) {
+                        if (insn.getOpcode() != Opcodes.INVOKEVIRTUAL) {
+                            insn = insn.getNext();
+                            continue;
+                        }
+                        MethodInsnNode methodInsn = (MethodInsnNode) insn;
+                        if (!methodInsn.owner.equals(WAR_CLASS) || !methodInsn.desc.equals("()Ljava/lang/String;")) {
+                            throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "getWarName", "Invalid owner or descriptor");
+                        }
+                        getWarNameMethod = methodInsn.name;
+                        insn = insn.getNext();
+                        break;
+                    }
+                    while (insn != null) {
+                        if (insn.getOpcode() != Opcodes.INVOKEVIRTUAL
+                                || ((MethodInsnNode) insn).owner.equals("java/lang/StringBuilder")) {
+                            insn = insn.getNext();
+                            continue;
+                        }
+                        MethodInsnNode methodInsn = (MethodInsnNode) insn;
+                        if (!methodInsn.owner.equals(WAR_CLASS) || !methodInsn.desc.equals("()Ljava/lang/String;")) {
+                            throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "getDisplayScore", "Invalid owner or descriptor");
+                        }
+                        getWarDisplayScoreMethod = methodInsn.name;
+                        insn = insn.getNext();
+                        break;
+                    }
+                    while (insn != null) {
+                        if (insn.getOpcode() != Opcodes.INVOKEVIRTUAL
+                                || ((MethodInsnNode) insn).owner.equals("java/lang/StringBuilder")) {
+                            insn = insn.getNext();
+                            continue;
+                        }
+                        MethodInsnNode methodInsn = (MethodInsnNode) insn;
+                        if (!methodInsn.owner.equals(WAR_CLASS) || !methodInsn.desc.equals("()Ljava/lang/String;")) {
+                            throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "getDisplayAge", "Invalid owner or descriptor");
+                        }
+                        getWarDisplayAgeMethod = methodInsn.name;
+                        insn = insn.getNext();
+                        break;
+                    }
+                    while (insn != null) {
+                        if (insn.getOpcode() != Opcodes.INVOKEVIRTUAL
+                                || !((MethodInsnNode) insn).owner.equals(node.name)) {
+                            insn = insn.getNext();
+                            continue;
+                        }
+                        if (!((MethodInsnNode) insn).desc.equals("()I")) {
+                            throw new OutdatedDeobfuscatorException("Space", WIDGET_CLASS, "getInnerWidth", "Invalid descriptor");
+                        }
+                        widgetGetInnerWidthMethod = ((MethodInsnNode) insn).name;
+                        insn = insn.getNext();
+                        break;
+                    }
+                    while (insn != null) {
+                        if (insn.getOpcode() != Opcodes.NEW) {
+                            insn = insn.getNext();
+                            continue;
+                        }
+                        paginatedWidgetClass = ((TypeInsnNode) insn).desc;
+                        break;
+                    }
+                    for (MethodNode method2 : node.methods) {
+                        if (method2.name.equals("<init>") && method2.desc.equals("()V")) {
+                            insn = method2.instructions.getFirst();
+                            insn = getNext(insn, Opcodes.ICONST_0).getNext();
+                            if (insn.getOpcode() != Opcodes.PUTFIELD) {
+                                throw new OutdatedDeobfuscatorException("Space", WAR_LIST_WIDGET_CLASS, "__unused0", "Unexpected ocpode");
+                            }
+                            fieldInsn = (FieldInsnNode) insn;
+                            remapField(mappingsStream, node.name, fieldInsn.name, "__unused0", "()I");
+                            insn = getNext(insn, Opcodes.ICONST_3).getNext();
+                            if (insn.getOpcode() != Opcodes.INVOKEVIRTUAL) {
+                                throw new OutdatedDeobfuscatorException("Space", "WidgetLayout", "setHorizontalMargin", "Unexpected ocpode");
+                            }
+                            MethodInsnNode methodInsn = (MethodInsnNode) insn;
+                            if (!methodInsn.desc.equals("(I)V")) {
+                                throw new OutdatedDeobfuscatorException("Space", "WidgetLayout", "setHorizontalMargin", "Unexpected descriptor");
+                            }
+                            for (ClassNode node2 : nodes) {
+                                if (isInstanceofClass(node2, methodInsn.owner)) {
+                                    remapMethod(mappingsStream, node2.name, methodInsn.name, "setHorizontalMargin", "(I)V");
+                                }
+                            }
+                        }
+                    }
+                    continue nodeLoop;
+                }
+            }
+        }
+
+        if (warListWidgetNode == null) {
+            throw new OutdatedDeobfuscatorException("Space", WAR_LIST_WIDGET_CLASS, "*", "Cannot be resolved");
+        }
+        if (paginatedWidgetClass == null) {
+            throw new OutdatedDeobfuscatorException("Space", PAGINATED_WIDGET_CLASS, "*", "Cannot be resolved");
+        }
+
+        remapClass(mappingsStream, warListWidgetNode.name, WAR_LIST_WIDGET_CLASS);
+        remapClass(mappingsStream, warListEntryClass, WAR_LIST_ENTRY_CLASS);
+        remapClass(mappingsStream, paginatedWidgetClass, PAGINATED_WIDGET_CLASS);
+        remapMethod(mappingsStream, warListWidgetNode.name, warListWidgetPopulateMethod, "populate", "()V");
+        remapMethod(mappingsStream, WAR_CLASS, getWarNameMethod, "getWarName", "()Ljava/lang/String;");
+        remapMethod(mappingsStream, WAR_CLASS, getWarDisplayScoreMethod, "getDisplayScore", "()Ljava/lang/String;");
+        remapMethod(mappingsStream, WAR_CLASS, getWarDisplayAgeMethod, "getDisplayAge", "()Ljava/lang/String;");
+
+        ClassNode warListEntryNode = name2Node.get(warListEntryClass);
+        String flowButtonClass = name2Node.get(warListEntryNode.superName).superName;
+
+        remapClass(mappingsStream, flowButtonClass, FLOW_BUTTON_CLASS);
+
+        assignAsInnerClass(warListWidgetNode, warListEntryNode, WAR_LIST_ENTRY_CLASS.substring(WAR_LIST_ENTRY_CLASS.lastIndexOf('$') + 1));
+
+        String getLazyMethodName = null;
+        String getLazyMethodDesc = null;
+        String getOrCreateWarMethod = null;
+
+        for (MethodNode method : space.methods) {
+            if (method.desc.equals("()V")) {
+                TypeInsnNode typeInsn = getNextOrNull(method.instructions.getFirst(), Opcodes.NEW);
+                if (typeInsn != null && typeInsn.desc.equals(warListWidgetNode.name)) {
+                    remapMethod(mappingsStream, SPACE_CLASS, method.name, "openActiveWarList", "()V");
+                }
+            } else if (method.desc.equals("(L" + EMPIRE_CLASS + ";L" + EMPIRE_CLASS + ";)L" + WAR_CLASS + ";")) {
+                TypeInsnNode typeInsn = getNextOrNull(method.instructions.getFirst(), Opcodes.NEW);
+                if (typeInsn != null && typeInsn.desc.equals(WAR_CLASS)) {
+                    remapMethod(mappingsStream, SPACE_CLASS, method.name, "getOrCreateWar", "(L" + EMPIRE_CLASS + ";L" + EMPIRE_CLASS + ";)L" + WAR_CLASS + ";");
+                    MethodInsnNode methodInsn = getPreviousOrNull(typeInsn, Opcodes.INVOKEVIRTUAL);
+                    if (methodInsn == null) {
+                        throw new OutdatedDeobfuscatorException("Space", "Lazy", "get", "Not found");
+                    }
+                    getLazyMethodName = methodInsn.name;
+                    getLazyMethodDesc = methodInsn.desc;
+                    remapClass(mappingsStream, getLazyMethodDesc.substring(3, getLazyMethodDesc.length() - 1), BASE_PACKAGE + "Identifable");
+                    getOrCreateWarMethod = method.name;
+                }
+            }
+        }
+
+        if (getOrCreateWarMethod == null) {
+            throw new OutdatedDeobfuscatorException("Space", SPACE_CLASS, "getOrCreateWar", "Not found");
+        }
+
+        String onTakeStarFromMethod = null;
+
+        for (MethodNode method : space.methods) {
+            if (method.desc.equals("(L" + EMPIRE_CLASS + ";L" + EMPIRE_CLASS + ";)V")) {
+                MethodInsnNode methodInsn = getNextOrNull(method.instructions.getFirst(), Opcodes.INVOKESTATIC);
+                if (methodInsn == null
+                        || !methodInsn.owner.equals(SPACE_CLASS)
+                        || !methodInsn.name.equals(getOrCreateWarMethod)
+                        || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";L" + EMPIRE_CLASS + ";)L" + WAR_CLASS + ";")) {
+                    continue;
+                }
+                if (onTakeStarFromMethod != null) {
+                    throw new OutdatedDeobfuscatorException("Space", SPACE_CLASS, "onTakeStarFrom", "Collision");
+                }
+                onTakeStarFromMethod = method.name;
+                methodInsn = getNext(methodInsn, Opcodes.INVOKEVIRTUAL);
+                if (!methodInsn.owner.equals(WAR_CLASS) || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";)V")) {
+                    throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "incrementScore", "Invalid owner or desc");
+                }
+                remapMethod(mappingsStream, WAR_CLASS, methodInsn.name, "incrementScore", "(L" + EMPIRE_CLASS + ";)V");
+            } else if (method.desc.equals("(L" + EMPIRE_CLASS + ";)Ljava/util/List;")) {
+                FieldInsnNode fInsn = getNextOrNull(method.instructions.getFirst(), Opcodes.GETSTATIC);
+                if (fInsn != null && fInsn.owner.equals(SPACE_CLASS) && fInsn.name.equals(warsField) && fInsn.desc.equals("Ljava/util/Vector;")) {
+                    MethodInsnNode methodInsn = getNextOrNull(fInsn, Opcodes.INVOKEVIRTUAL);
+                    if (methodInsn != null && methodInsn.owner.equals("java/util/Vector") && methodInsn.name.equals("stream")) {
+                        remapMethod(mappingsStream, SPACE_CLASS, method.name, "getParticipatingWars", "(L" + EMPIRE_CLASS + ";)Ljava/util/List;");
+                    }
+                }
+            }
+        }
+
+        if (onTakeStarFromMethod == null) {
+            throw new OutdatedDeobfuscatorException("Space", SPACE_CLASS, "onTakeStarFrom", "Not found");
+        }
+
+        remapMethod(mappingsStream, SPACE_CLASS, onTakeStarFromMethod, "onTakeStarFrom", "(L" + EMPIRE_CLASS + ";L" + EMPIRE_CLASS + ";)V");
+
+        ClassNode starNode = name2Node.get(STAR_CLASS);
+
+        String onHostileTakeoverMethod = null;
+
+        for (MethodNode method : starNode.methods) {
+            if (method.desc.equals("(L" + EMPIRE_CLASS + ";)V")) {
+                MethodInsnNode methodInsn = getNextOrNull(method.instructions.getFirst(), Opcodes.INVOKESTATIC);
+                if (!methodInsn.owner.equals(SPACE_CLASS)
+                        || !methodInsn.name.equals(onTakeStarFromMethod)
+                        || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";L" + EMPIRE_CLASS + ";)V")) {
+                    continue;
+                }
+                if (onHostileTakeoverMethod != null) {
+                    throw new OutdatedDeobfuscatorException("Space", STAR_CLASS, "onHostileTakeover", "Collision");
+                }
+                onHostileTakeoverMethod = method.name;
+                methodInsn = getNextOrNull(methodInsn, Opcodes.INVOKEVIRTUAL);
+                if (!methodInsn.owner.equals(STAR_CLASS) || !methodInsn.desc.equals("(I)V")) {
+                    throw new OutdatedDeobfuscatorException("Space", STAR_CLASS, "setDevelopment", "Invalid owner or desc");
+                }
+                remapMethod(mappingsStream, STAR_CLASS, methodInsn.name, "setDevelopment", "(I)V");
+                LdcInsnNode ldcInsn = getNext(methodInsn, Opcodes.LDC);
+                while (!(ldcInsn.cst instanceof Number)
+                        || (Math.abs(((Number) ldcInsn.cst).floatValue() - 0.02F) > 0.001F)) {
+                    ldcInsn = getNext(ldcInsn, Opcodes.LDC);
+                }
+                methodInsn = (MethodInsnNode) ldcInsn.getNext();
+                if (!methodInsn.owner.equals(STAR_CLASS) || !methodInsn.desc.equals("(F)V")) {
+                    throw new OutdatedDeobfuscatorException("Space", STAR_CLASS, "reduceWealthFactor", "Invalid owner or desc");
+                }
+                remapMethod(mappingsStream, STAR_CLASS, methodInsn.name, "reduceWealthFactor", "(F)V");
+            }
+        }
+
+        if (onHostileTakeoverMethod == null) {
+            throw new OutdatedDeobfuscatorException("Space", STAR_CLASS, "onHostileTakeover", "Not found");
+        }
+
+        remapMethod(mappingsStream, STAR_CLASS, onHostileTakeoverMethod, "onHostileTakeover", "(L" + EMPIRE_CLASS + ";)V");
+
+        ClassNode warNode = name2Node.get(WAR_CLASS);
+        String getScoreMethod = null;
+        String isActiveMethod = null;
+
+        for (MethodNode method : warNode.methods) {
+            if (method.desc.equals("(L" + EMPIRE_CLASS + ";)I")) {
+                LdcInsnNode ldcInsn = getNextOrNull(method.instructions.getFirst(), Opcodes.LDC);
+                if (ldcInsn != null && ldcInsn.cst.equals("Score fetched for empire not in the war, that's weird huh")) {
+                    if (getScoreMethod != null) {
+                        throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "getScore", "Collision");
+                    }
+                    getScoreMethod = method.name;
+                }
+            } else if (method.name.equals("getItems") && method.desc.equals("()Ljava/util/ArrayList;")) {
+                insn = method.instructions.getFirst();
+                while (insn != null && !(insn.getOpcode() == Opcodes.LDC && ((LdcInsnNode) insn).cst.equals("Active"))) {
+                    insn = insn.getNext();
+                }
+                if (insn == null) {
+                    continue;
+                }
+                MethodInsnNode methodInsn = getNext(insn, Opcodes.INVOKEVIRTUAL);
+                if (!methodInsn.owner.equals(WAR_CLASS) || !methodInsn.desc.equals("()Z")) {
+                    throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "isActive", "Invalid owner or desc");
+                }
+                isActiveMethod = methodInsn.name;
+            }
+        }
+
+        if (getScoreMethod == null) {
+            throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "getScore", "Not found");
+        }
+        if (isActiveMethod == null) {
+            throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "isActive", "Not found");
+        }
+
+        for (insn = logicalTickMethod.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn.getOpcode() != Opcodes.INVOKEVIRTUAL) {
+                continue;
+            }
+            MethodInsnNode methodInsn = (MethodInsnNode) insn;
+            if (!methodInsn.owner.equals(WAR_CLASS) || !methodInsn.name.equals(isActiveMethod) || !methodInsn.desc.equals("()Z")) {
+                continue;
+            }
+            methodInsn = getNext(methodInsn, Opcodes.INVOKEVIRTUAL);
+            if (!methodInsn.owner.equals(WAR_CLASS) || !methodInsn.desc.equals("()V")) {
+                throw new OutdatedDeobfuscatorException("Space", WAR_CLASS, "tick", "Invalid owner or desc");
+            }
+            remapMethod(mappingsStream, WAR_CLASS, methodInsn.name, "tick", "()V");
+            break;
+        }
+
+        remapMethod(mappingsStream, WAR_CLASS, getScoreMethod, "getScore", "(L" + EMPIRE_CLASS + ";)I");
+        remapMethod(mappingsStream, WAR_CLASS, isActiveMethod, "isActive", "()Z");
+
+        for (ClassNode node : nodes) {
+            if (isInstanceofWidget(node)) {
+                remapMethod(mappingsStream, node.name, widgetGetInnerWidthMethod, "getInnerWidth", "()I");
+            } else if (isInstanceofClass(node, BASE_PACKAGE + "Lazy")) {
+                remapMethod(mappingsStream, node.name, getLazyMethodName, "get", getLazyMethodDesc);
+            }
         }
     }
 
