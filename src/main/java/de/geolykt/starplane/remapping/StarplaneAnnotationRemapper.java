@@ -189,7 +189,7 @@ public class StarplaneAnnotationRemapper implements TinyRemapper.Extension {
                                         LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", super.name, field.name, field.desc);
                                         break;
                                     }
-                                    memberDesc = "(" + argDesc + ")" + ((Type) methodDesc.values.get(ret)).getInternalName();
+                                    memberDesc = "(" + argDesc + ")" + ((Type) methodDesc.values.get(ret)).getDescriptor();
                                 } else if (valueName.equals("format")) {
                                     format = ((String[]) annotation.values.get(i + 1))[1];
                                 } else {

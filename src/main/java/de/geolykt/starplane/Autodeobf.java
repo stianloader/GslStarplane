@@ -882,6 +882,8 @@ public class Autodeobf implements StarmappedNames {
         String allianceField = null;
         String getAllianceMethod = null;
         String setAllianceMethod = null;
+        String getRelationsMethod = null;
+        String vassalizeMethod = null;
 
         for (MethodNode method : empireNode.methods) {
             if (method.desc.equals("()Ljava/util/Vector;")) {
@@ -1019,6 +1021,47 @@ public class Autodeobf implements StarmappedNames {
                     }
                     insn = insn.getNext();
                 }
+            } else if (method.desc.equals("(L" + EMPIRE_CLASS + ";)Ljava/lang/String;")) {
+                AbstractInsnNode insn = method.instructions.getFirst();
+                LdcInsnNode ldcInsn = getNextOrNull(insn, Opcodes.LDC);
+                if (ldcInsn != null && ldcInsn.cst.equals("NO CONTACT")) {
+                    if (getRelationsMethod != null) {
+                        throw new OutdatedDeobfuscatorException("Empire", "Empire", "getRelations", "Collision");
+                    }
+                    getRelationsMethod = method.name;
+                    MethodInsnNode methodInsn = getPreviousOrNull(ldcInsn, Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";)Z")) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "hasContact", "Invalid owner or descriptor");
+                    }
+                    remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "hasContact", "(L" + EMPIRE_CLASS + ";)Z");
+                    methodInsn = getNext(ldcInsn, Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("()L" + EMPIRE_CLASS + ";")) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "getMaster", "Invalid owner or descriptor");
+                    }
+                    remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "getMaster", "()L" + EMPIRE_CLASS + ";");
+                    do {
+                        ldcInsn = getNext(ldcInsn, Opcodes.LDC);
+                    } while (!ldcInsn.cst.equals("ALLIED"));
+                    methodInsn = getPreviousOrNull(ldcInsn, Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";)Z")) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "isAllied", "Invalid owner or descriptor");
+                    }
+                    remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "isAllied", "(L" + EMPIRE_CLASS + ";)Z");
+                    methodInsn = getNext(ldcInsn, Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";)Z")) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "isAtPeace", "Invalid owner or descriptor");
+                    }
+                    remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "isAtPeace", "(L" + EMPIRE_CLASS + ";)Z");
+                }
+            } else if (method.desc.equals("(L" + EMPIRE_CLASS + ";)V")) {
+                AbstractInsnNode insn = method.instructions.getFirst();
+                LdcInsnNode ldcInsn = getNextOrNull(insn, Opcodes.LDC);
+                if (ldcInsn != null && ldcInsn.cst.equals("Has been vassalized by ")) {
+                    if (vassalizeMethod != null) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "vassalize", "Collision");
+                    }
+                    vassalizeMethod = method.name;
+                }
             }
         }
 
@@ -1046,12 +1089,20 @@ public class Autodeobf implements StarmappedNames {
         if (setAllianceMethod == null) {
             throw new OutdatedDeobfuscatorException("Empire", "Empire", "setAlliance", "Unresolved");
         }
+        if (getRelationsMethod == null) {
+            throw new OutdatedDeobfuscatorException("Empire", "Empire", "getRelations", "Unresolved");
+        }
+        if (vassalizeMethod == null) {
+            throw new OutdatedDeobfuscatorException("Empire", "Empire", "vassalize", "Unresolved");
+        }
 
         remapField(mappingsStream, EMPIRE_CLASS, recentlyLostStarsField, "recentlyLostStars", "Ljava/util/Deque;");
         remapField(mappingsStream, EMPIRE_CLASS, beaconsField, "beacons", "Ljava/util/ArrayList;");
         remapField(mappingsStream, EMPIRE_CLASS, allianceField, "alliance", "L" + ALLIANCE_CLASS + ";");
         remapMethod(mappingsStream, EMPIRE_CLASS, getAllianceMethod, "getAlliance", "()L" + ALLIANCE_CLASS + ";");
         remapMethod(mappingsStream, EMPIRE_CLASS, setAllianceMethod, "setAlliance", "(L" + ALLIANCE_CLASS + ";)V");
+        remapMethod(mappingsStream, EMPIRE_CLASS, getRelationsMethod, "getRelations", "(L" + EMPIRE_CLASS + ";)Ljava/lang/String;");
+        remapMethod(mappingsStream, EMPIRE_CLASS, vassalizeMethod, "vassalize", "(L" + EMPIRE_CLASS + ";)V");
 
         String flagOwnerInterface = null;
         for (String itf : empireNode.interfaces) {
@@ -1100,6 +1151,70 @@ public class Autodeobf implements StarmappedNames {
             throw new OutdatedDeobfuscatorException("Empire", "Empire", "internalSessionRandom", "Unresolved");
         }
         remapField(mappingsStream, EMPIRE_CLASS, internalSessionRandomField, "internalSessionRandom", "Ljava/util/Random;");
+
+        String starTickMethod = null;
+        String canBeVassalizedByMethod = null;
+        String canVassalizeMethod = null;
+
+        ClassNode starNode = name2Node.get(STAR_CLASS);
+        for (MethodNode method : starNode.methods) {
+            if (method.desc.equals("()V")) {
+                AbstractInsnNode insn = method.instructions.getFirst();
+                LdcInsnNode ldcInsn = getNextOrNull(insn, Opcodes.LDC);
+                while (ldcInsn != null && !ldcInsn.cst.equals("Diplomatic master stroke")) {
+                    ldcInsn = getNextOrNull(ldcInsn, Opcodes.LDC);
+                }
+                if (ldcInsn != null) {
+                    if (starTickMethod != null) {
+                        throw new OutdatedDeobfuscatorException("Empire", "Star", "tick", "Collision");
+                    }
+                    starTickMethod = method.name;
+                    MethodInsnNode methodInsn = getNext(ldcInsn, Opcodes.INVOKESPECIAL);
+                    if (!methodInsn.owner.equals("snoddasmannen/galimulator/relationships/LinearDropRelMod")) {
+                        throw new OutdatedDeobfuscatorException("Empire", "DiploymacyActor", "*", "Unexpected owner");
+                    }
+                    remapClass(mappingsStream, methodInsn.desc.substring(2, methodInsn.desc.indexOf(';')), BASE_PACKAGE + "relationships/DiploymacyActor");
+                    methodInsn = getNext(methodInsn, Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals("snoddasmannen/galimulator/relationships/RelManager")) {
+                        throw new OutdatedDeobfuscatorException("Empire", "DiploymacyActor", "addModifier", "Unexpected owner");
+                    }
+                    remapMethod(mappingsStream, "snoddasmannen/galimulator/relationships/RelManager", methodInsn.name, "addModifier", methodInsn.desc);
+                    methodInsn = getNext(getNext(methodInsn, Opcodes.INVOKEVIRTUAL), Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";)Z")) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "canBeVassalizedBy", "Unexpected owner or descriptor");
+                    }
+                    canBeVassalizedByMethod = methodInsn.name;
+                    remapMethod(mappingsStream, EMPIRE_CLASS, canBeVassalizedByMethod, "canBeVassalizedBy", "(L" + EMPIRE_CLASS + ";)Z");
+                    methodInsn = getNext(getNext(methodInsn, Opcodes.INVOKEVIRTUAL), Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("(L" + EMPIRE_CLASS + ";)Z")) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "canVassalize", "Unexpected owner or descriptor");
+                    }
+                    canVassalizeMethod = methodInsn.name;
+                    remapMethod(mappingsStream, EMPIRE_CLASS, canVassalizeMethod, "canVassalize", "(L" + EMPIRE_CLASS + ";)Z");
+                }
+            }
+        }
+
+        if (starTickMethod == null) {
+            throw new OutdatedDeobfuscatorException("Empire", "Star", "tick", "Unresolved");
+        }
+
+        for (MethodNode method : empireNode.methods) {
+            if (method.desc.equals("(L" + EMPIRE_CLASS + ";)Z")) {
+                if (method.name.equals(canVassalizeMethod)) {
+                    MethodInsnNode methodInsn = getNext(method.instructions.getFirst(), Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("()Z")) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "isNotDegenerating", "Unexpected owner or descriptor");
+                    }
+                    remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "isNotDegenerating", "()Z");
+                    methodInsn = getNext(methodInsn, Opcodes.INVOKEVIRTUAL);
+                    if (!methodInsn.owner.equals(EMPIRE_CLASS) || !methodInsn.desc.equals("()Z")) {
+                        throw new OutdatedDeobfuscatorException("Empire", EMPIRE_CLASS, "isAvoidingAlliances", "Unexpected owner or descriptor");
+                    }
+                    remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "isAvoidingAlliances", "()Z");
+                }
+            }
+        }
     }
 
     public void remapEmploymentAgency(Writer mappingsStream) throws IOException {
