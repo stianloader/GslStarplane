@@ -1,4 +1,4 @@
-package de.geolykt.starloader.gslstarplane;
+package de.geolykt.starloader.gcmcstarplane;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -28,11 +28,13 @@ import de.geolykt.starplane.Utils;
 import de.geolykt.starplane.XmlWriter;
 
 @CacheableTask
-public class GslGenEclipseRunsTask extends DefaultTask {
+public class GcmcGenEclipseRunsTask extends DefaultTask {
 
     private final File runModLaunchFile;
 
-    public GslGenEclipseRunsTask() {
+    private GcmcExtension extension = getProject().getExtensions().getByType(GcmcExtension.class);
+
+    public GcmcGenEclipseRunsTask() {
         super.dependsOn("deployMods");
         this.runModLaunchFile = super.getProject().file("runMods.launch");
     }
@@ -66,24 +68,26 @@ public class GslGenEclipseRunsTask extends DefaultTask {
                 }
                 workingDir = jExecTask.getWorkingDir().toPath();
                 jvmArgs.addAll(jExecTask.getAllJvmArgs());
-                jvmArgs.add(GslStarplanePlugin.getBootPath(super.getProject()));
+                jvmArgs.add(GcmcStarplanePlugin.getBootPath(super.getProject()));
             }
             jvmArgs.add("-Dde.geolykt.starloader.launcher.IDELauncher.modURLs=" + getModURLs().toString());
-            Path dataFolder = workingDir.resolve("data");
 
             List<String> classpathElements = new ArrayList<>();
 
-            // resolve data folder
-            if (Files.notExists(dataFolder)) {
-                File gameFolder = Utils.getGameDir(Utils.STEAM_GALIMULATOR_APPNAME);
-                Path galimDataFolder;
-                if (gameFolder == null || Files.notExists(galimDataFolder = gameFolder.toPath().resolve("data"))) {
-                    getLogger().error("Couldn't locate data folder. You might need to copy the data folder manually in order to be able to run this task");
-                } else {
-                    try {
-                        Files.createSymbolicLink(dataFolder, galimDataFolder);
-                    } catch (IOException e) {
-                        getLogger().error("Cannot link data folder. You might need to copy the data folder manually in order to be able to run this task", e);
+            if (this.extension.steamAppId == Utils.STEAM_GALIMULATOR_APPID) {
+                // resolve data folder
+                Path dataFolder = workingDir.resolve("data");
+                if (Files.notExists(dataFolder)) {
+                    File gameFolder = Utils.getGameDir(Utils.STEAM_GALIMULATOR_APPNAME);
+                    Path galimDataFolder;
+                    if (gameFolder == null || Files.notExists(galimDataFolder = gameFolder.toPath().resolve("data"))) {
+                        getLogger().error("Couldn't locate data folder. You might need to copy the data folder manually in order to be able to run this task");
+                    } else {
+                        try {
+                            Files.createSymbolicLink(dataFolder, galimDataFolder);
+                        } catch (IOException e) {
+                            getLogger().error("Cannot link data folder. You might need to copy the data folder manually in order to be able to run this task", e);
+                        }
                     }
                 }
             }

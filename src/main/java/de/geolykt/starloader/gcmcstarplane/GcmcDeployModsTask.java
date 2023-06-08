@@ -1,4 +1,4 @@
-package de.geolykt.starloader.gslstarplane;
+package de.geolykt.starloader.gcmcstarplane;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,7 +41,7 @@ import de.geolykt.starplane.Utils;
 import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
 
 @DisableCachingByDefault(because = "Not worth it")
-public class GslDeployModsTask extends ConventionTask {
+public class GcmcDeployModsTask extends ConventionTask {
 
     @NotNull
     private final List<Object> modJars = new ArrayList<>();
@@ -130,9 +130,9 @@ public class GslDeployModsTask extends ConventionTask {
         }
 
         // Remove any older copies of the mod
-        Path modDirectory = super.getProject().getExtensions().getByType(GslExtension.class).modDirectory;
+        Path modDirectory = super.getProject().getExtensions().getByType(GcmcExtension.class).modDirectory;
         if (modDirectory == null) {
-            JavaExec exec = GslStarplanePlugin.RUN_TASKS.get(super.getProject());
+            JavaExec exec = GcmcStarplanePlugin.RUN_TASKS.get(super.getProject());
             if (exec == null) {
                 // TODO make this more configurable. This task may have other reasons to exist too!
                 throw new IllegalStateException("Unable to resolve the extension directory.");

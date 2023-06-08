@@ -1,4 +1,4 @@
-package de.geolykt.starloader.gslstarplane;
+package de.geolykt.starloader.gcmcstarplane;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -10,7 +10,7 @@ import org.gradle.api.Project;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class GslExtension {
+public class GcmcExtension {
 
     public enum ModType {
         EXTERNAL,
@@ -28,6 +28,28 @@ public class GslExtension {
     @Nullable
     public List<Object> internalMods;
     List<BiConsumer<ModType, Object>> updateHooks = new ArrayList<>();
+
+    public int steamAppId;
+    public String gameName;
+    public String jarPath;
+    public String mainClass;
+    @NotNull
+    public final List<@NotNull String> jarIncludes = new ArrayList<>();
+
+    public void game(int id, String name, String path, @NotNull String... includes) {
+        this.steamAppId = id;
+        this.gameName = name;
+        this.jarPath = path;
+        for (String s : includes) {
+            this.jarIncludes.add(s);
+        }
+    }
+
+    public void jarInclude(@NotNull String... includes) {
+        for (String s : includes) {
+            this.jarIncludes.add(s);
+        }
+    }
 
     public void externalMod(Object... notations) {
         for (Object o : notations) {

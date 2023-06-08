@@ -1,18 +1,21 @@
-# GslStarplane: Starplane for Gradle
+# GcmcStarplane: Common Modding (Tool-)chain Starplane for Gradle
 
 GslStarplane is the gradle port of the starplane buildsystem originally written
 for use in combination with Brachyura. Starplane lays the foundation of modern
 galimulator modding.
 
+GcmcStarplane is a more multi-purpose branch of GslStarplane, exploring capabilities
+for mods beyond the current slintermediary + spstarmap approach.
+
+GcmcStarplane is meant to be used for modding non-galimulator games such as necesse.
+However it is not meant for modding games with an already established toolchain, as it
+applies to minecraft or runescape.
+
 ## Including the plugin
 
-**WARNING:** When publishing your code online with this plugin enabled, you
-should make extra sure to NOT include the `build` directory. GslStarplane
-pushes deobfuscated jars which have a copyright on them to it.
-
-GslStarplane functions as a gradle plugin, so it first needs to be applied on a
+GcmcStarplane functions as a gradle plugin, so it first needs to be applied on a
 gradle project in order to work. Under groovy you can do it by adding
-`id 'gsl-starplane' version '0.1.0'` to the plugins block in the `build.gradle`
+`id 'gcmc-starplane' version '0.1.0'` to the plugins block in the `build.gradle`
 file. The full plugins block will thus look something like follows:
 
 ```groovy
@@ -20,11 +23,11 @@ plugins {
     id 'java'
     id 'java-library'
     id 'maven-publish'
-    id 'gsl-starplane' version '0.1.0'
+    id 'gcmc-starplane' version '0.1.0'
 }
 ```
 
-However, as GslStarplane is not located in the default repositories and
+However, as GcmcStarplane is not located in the default repositories and
 depends on external projects, you also need to add a few maven repos to the
 pluginManagement block of the `settings.gradle` file. In full the additions
 probably look like that:

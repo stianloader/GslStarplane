@@ -1,4 +1,4 @@
-package de.geolykt.starloader.gslstarplane;
+package de.geolykt.starloader.gcmcstarplane;
 
 import java.io.File;
 import java.io.IOException;
@@ -8,15 +8,16 @@ import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.WeakHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -38,38 +39,33 @@ import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger.Severity;
 import org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences;
 import org.json.JSONArray;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.Label;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InnerClassNode;
-import org.objectweb.asm.tree.LineNumberNode;
-import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.LoggerFactory;
 
-import de.geolykt.starplane.Autodeobf;
 import de.geolykt.starplane.JarStripper;
 import de.geolykt.starplane.JarStripper.MavenId;
 import de.geolykt.starplane.ObfuscationHandler;
-import de.geolykt.starplane.Utils;
 import de.geolykt.starplane.sourcegen.EnhancedJarSaver;
 import de.geolykt.starplane.sourcegen.FernflowerLoggerAdapter;
 
-public class GslStarplanePlugin implements Plugin<Project> {
+public class GcmcStarplanePlugin implements Plugin<Project> {
 
-    public static final String TASK_GROUP = "GslStarplane";
-    public static final String GALIM_DEPS_CONFIGURATION_NAME = "galimulatorDependencies";
+    public static final String TASK_GROUP = "GcmcStarplane";
+    public static final String GALIM_DEPS_CONFIGURATION_NAME = "gameDependencies";
     public static final String DEV_RUNTIME_CONFIGURATION_NAME = "devRuntime";
     static final WeakHashMap<Project, ObfuscationHandler> OBF_HANDLERS = new WeakHashMap<>();
     static final WeakHashMap<Project, JavaExec> RUN_TASKS = new WeakHashMap<>();
 
     public void apply(Project project) {
-        project.getExtensions().create(GslExtension.class, "starplane", GslExtension.class);
-        project.afterEvaluate(GslStarplanePlugin::runDeobf);
-        project.afterEvaluate(GslStarplanePlugin::setupEEA);
-        project.getTasks().create("remapJar", GslRemapJarTask.class, (task) -> {
-            task.setDescription("Remap deobfuscated jars to use obfuscated mappings.");
-            task.setGroup(TASK_GROUP);
-        });
+        project.getExtensions().create(GcmcExtension.class, "starplane", GcmcExtension.class);
+        project.afterEvaluate(GcmcStarplanePlugin::runDeobf);
+        project.afterEvaluate(GcmcStarplanePlugin::setupEEA);
         project.getConfigurations().register(DEV_RUNTIME_CONFIGURATION_NAME).configure(configuration -> {
             configuration.setVisible(false);
             configuration.setCanBeResolved(true);
@@ -77,26 +73,26 @@ public class GslStarplanePlugin implements Plugin<Project> {
             SourceSetContainer sourceSets = (SourceSetContainer) Objects.requireNonNull(project.getProperties().get("sourceSets"));
             configuration.extendsFrom(project.getConfigurations().getByName(sourceSets.getByName("main").getRuntimeClasspathConfigurationName()));
         });
-        project.getTasks().create("deployMods", GslDeployModsTask.class, (task) -> {
+        project.getTasks().create("deployMods", GcmcDeployModsTask.class, (task) -> {
             task.setDescription("Deploy mods to the extension directory of the development environment.");
             task.setGroup(TASK_GROUP);
         });
-        RUN_TASKS.put(project, project.getTasks().create("runMods", GslRunModsTask.class));
-        project.getTasks().create("genEclipseRuns", GslGenEclipseRunsTask.class, (task) -> {
+        RUN_TASKS.put(project, project.getTasks().create("runMods", GcmcRunModsTask.class));
+        project.getTasks().create("genEclipseRuns", GcmcGenEclipseRunsTask.class, (task) -> {
             task.setDescription("Generate eclipse *.launch files");
             task.setGroup(TASK_GROUP);
         });
     }
 
     private static void setupEEA(Project project) {
-        GslExtension extension = project.getExtensions().getByType(GslExtension.class);
+        GcmcExtension extension = project.getExtensions().getByType(GcmcExtension.class);
         if (extension.eclipseEEA == null) {
             return;
         }
         File eeaPath = project.file(extension.eclipseEEA);
         EclipseModel eclipseModel = (EclipseModel) project.getProperties().get("eclipse");
         if (eclipseModel == null) {
-            LoggerFactory.getLogger(GslStarplanePlugin.class).error("Cannot setup EEA as the eclipse plugin is missing!");
+            LoggerFactory.getLogger(GcmcStarplanePlugin.class).error("Cannot setup EEA as the eclipse plugin is missing!");
             return;
         }
         // Based on https://github.com/eclipse/buildship/issues/421#issuecomment-285344240
@@ -124,13 +120,13 @@ public class GslStarplanePlugin implements Plugin<Project> {
         }
         Path altCache = project.getBuildDir().toPath().resolve("gsl-starplane");
 
-        GslExtension extension = project.getExtensions().getByType(GslExtension.class);
-        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getRASContents(project));
+        GcmcExtension extension = project.getExtensions().getByType(GcmcExtension.class);
+        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.gameName, extension.jarPath, extension.getRASContents(project), extension.jarIncludes);
         OBF_HANDLERS.put(project, oHandler);
         resolve(project, oHandler);
         JavaExec runTask = RUN_TASKS.get(project);
         if (runTask != null) {
-            runTask.systemProperty("de.geolykt.starloader.launcher.CLILauncher.mainClass", "com.example.Main");
+            runTask.systemProperty("de.geolykt.starloader.launcher.CLILauncher.mainClass", extension.mainClass);
             Path modsDir = extension.modDirectory;
             if (modsDir == null) {
                 modsDir = runTask.getWorkingDir().toPath().resolve("mods");
@@ -142,7 +138,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
     static String getBootPath(Project p) {
         JSONArray bootPath = new JSONArray();
         try {
-            bootPath.put(OBF_HANDLERS.get(p).getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toUri().toURL().toExternalForm());
+            bootPath.put(OBF_HANDLERS.get(p).getRuntimeRemappedJar().toUri().toURL().toExternalForm());
             for (File f : p.getConfigurations().getByName(GALIM_DEPS_CONFIGURATION_NAME).resolve()) {
                 bootPath.put(f.toURI().toURL().toExternalForm());
             }
@@ -158,9 +154,9 @@ public class GslStarplanePlugin implements Plugin<Project> {
         // compileStrippedSource = decompiled stripped galimulator jar with compile-time accesss
         // runtimeLarge = complete galimulator jar with runtime access
         Path compileLarge = obfHandler.getTransformedGalimulatorJar();
-        Path compileStripped = compileLarge.resolveSibling("galimulator-remapped-stripped-" + Autodeobf.getVersion() + ".jar");
-        Path compileStrippedSource = compileLarge.resolveSibling("galimulator-remapped-stripped-" + Autodeobf.getVersion() + "-sources.jar");
-        Path runtimeLarge = compileLarge.resolveSibling("galimulator-remapped-rt.jar");
+        Path compileStripped = compileLarge.resolveSibling(obfHandler.getGameName().toLowerCase(Locale.ROOT) + "-remapped-stripped-1.0.jar");
+        Path compileStrippedSource = compileLarge.resolveSibling(obfHandler.getGameName().toLowerCase(Locale.ROOT) + "-remapped-stripped-1.0-sources.jar");
+        Path runtimeLarge = obfHandler.getRuntimeRemappedJar();
 
         JarStripper stripper = new JarStripper();
         NamedDomainObjectProvider<Configuration> galimDepsConfig = null;
@@ -178,7 +174,13 @@ public class GslStarplanePlugin implements Plugin<Project> {
             throw new UncheckedIOException(e);
         }
         for (MavenId dep : deps) {
-            project.getDependencies().add(GALIM_DEPS_CONFIGURATION_NAME, dep.toGAVNotation());
+            Configuration detached = project.getConfigurations().detachedConfiguration(project.getDependencies().create(dep.toGAVNotation()));
+            try {
+                detached.resolve();
+                project.getDependencies().add(GALIM_DEPS_CONFIGURATION_NAME, dep.toGAVNotation());
+            } catch (Exception e) {
+                LoggerFactory.getLogger(GcmcStarplanePlugin.class).warn("Unable to look up automatically detected dependency {}", dep.toGAVNotation());
+            }
         }
 
         Set<File> transitiveDeps = galimDepsConfig.get().resolve();
@@ -214,16 +216,16 @@ public class GslStarplanePlugin implements Plugin<Project> {
 
         project.getRepositories().flatDir((repo) -> {
             repo.dir(compileLarge.getParent());
-            repo.setName("generated-galimulator-remapped");
+            repo.setName("generated-starplane-remapped");
         });
 
-        project.getDependencies().add("compileOnly", ":galimulator-remapped-stripped:" + Autodeobf.getVersion());
+        project.getDependencies().add("compileOnly", ":" + obfHandler.getGameName().toLowerCase(Locale.ROOT) + "-remapped-stripped:1.0");
 
         obfHandler.didRefresh = false; // Everything else was reset so we can dare to reset that flag should this method be called multiple times
     }
 
     private static void decompile(Project project, @NotNull Path runtimeLarge, @NotNull Path compileStripped, @NotNull Path compileStrippedSource, Set<File> transitiveDeps) throws IOException {
-        project.getLogger().info("Decompiling galimulator");
+        project.getLogger().info("Decompiling game");
 
         // Time to decompile that stripped jar
         Map<String, Object> args = new HashMap<>();
@@ -245,47 +247,50 @@ public class GslStarplanePlugin implements Plugin<Project> {
                 qf.addLibrary(transitiveDep);
             }
             qf.decompileContext();
+            qf.clearContext();
         }
 
-        project.getLogger().info("Galimulator decompiled");
+        project.getLogger().info("Game decompiled");
         project.getLogger().info("Replacing line mappings");
 
         replaceLineNumbers(compileStripped, lineMappings);
+
+        project.getLogger().info("Line mappings replaced (1/2)");
+
         replaceLineNumbers(runtimeLarge, lineMappings);
 
-        project.getLogger().info("Line mappings replaced");
+        project.getLogger().info("Line mappings replaced (2/2");
     }
 
     private static void replaceLineNumbers(@NotNull Path lineReplaceTarget, Map<String, int[]> lineMappings) throws IOException {
-        Map<ZipEntry, byte[]> resources = new LinkedHashMap<>();
-        Map<String, ClassNode> nameToNode = new HashMap<>();
-        Map<String, ClassReader> readers = new HashMap<>();
-        SortedSet<ClassNode> nodesSorted = new TreeSet<>((n1, n2) -> n1.name.compareTo(n2.name));
+        Map<String, ClassNode> nameToNode = new LinkedHashMap<>();
 
-        try (ZipInputStream zipIn = new ZipInputStream(Files.newInputStream(lineReplaceTarget))) {
+        try (ZipInputStream zipIn = new ZipInputStream(Files.newInputStream(lineReplaceTarget), StandardCharsets.UTF_8)) {
             for (ZipEntry entry = zipIn.getNextEntry(); entry != null; entry = zipIn.getNextEntry()) {
-                if (!entry.getName().endsWith(".class")) {
-                    resources.put(entry, Utils.readAllBytes(zipIn));
-                    continue;
+                if (entry.getName().endsWith(".class")) {
+                    ClassNode node = new ClassNode();
+                    ClassReader reader = new ClassReader(zipIn);
+                    reader.accept(node, ClassReader.SKIP_CODE ^ ClassReader.SKIP_FRAMES);
+                    nameToNode.put(node.name, node);
                 }
-                ClassNode node = new ClassNode();
-                ClassReader reader = new ClassReader(zipIn);
-                reader.accept(node, 0);
-                readers.put(node.name, reader);
-                nameToNode.put(node.name, node);
-                nodesSorted.add(node);
             }
         }
 
-        try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(lineReplaceTarget), StandardCharsets.UTF_8)) {
-            for (Map.Entry<ZipEntry, byte[]> resource : resources.entrySet()) {
-                zipOut.putNextEntry(resource.getKey());
-                zipOut.write(resource.getValue());
-            }
-            resources = null; // Free up memory
+        Path intermediary = Files.createTempFile("gcmcstarplane-linereplane-" + ThreadLocalRandom.current().nextInt(), ".jar");
+        try (ZipInputStream zipIn = new ZipInputStream(Files.newInputStream(lineReplaceTarget), StandardCharsets.UTF_8);
+                ZipOutputStream zipOutputStream = new ZipOutputStream(Files.newOutputStream(intermediary), StandardCharsets.UTF_8)) {
+            for (ZipEntry entry = zipIn.getNextEntry(); entry != null; entry = zipIn.getNextEntry()) {
+                zipOutputStream.putNextEntry(new ZipEntry(entry.getName()));
+                if (!entry.getName().endsWith(".class")) {
+                    byte[] buffer = new byte[4096];
+                    for (int read = zipIn.read(buffer); read != -1; read = zipIn.read(buffer)) {
+                        zipOutputStream.write(buffer, 0, read);
+                    }
+                    continue;
+                }
+                ClassReader reader = new ClassReader(zipIn);
 
-            for (ClassNode node : nodesSorted) {
-
+                ClassNode node = nameToNode.get(reader.getClassName());
                 ClassNode outermostClassnode = node;
                 outermostNodeFinderLoop:
                 while (true) {
@@ -302,7 +307,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
                     break;
                 }
 
-                if (node.sourceFile.equals("SourceFile")) {
+                if (node.sourceFile == null || node.sourceFile.equals("SourceFile")) {
                     int startName = outermostClassnode.name.lastIndexOf('/') + 1;
                     int innerSeperator = outermostClassnode.name.indexOf('$');
                     String baseName;
@@ -316,34 +321,48 @@ public class GslStarplanePlugin implements Plugin<Project> {
 
                 // mapping[i * 2] -> original line number; mapping[i * 2 + 1] -> new line number
                 int[] mapping = lineMappings.get(outermostClassnode.name);
+                Map<Integer, Integer> lineNumberConversion;
 
-                if (mapping != null) {
-                    Map<Integer, Integer> lineNumberConversion = new HashMap<>();
+                if (mapping == null) {
+                    lineNumberConversion = null;
+                } else {
+                    lineNumberConversion = new HashMap<>();
                     for (int i = 0; i < mapping.length;) {
                         lineNumberConversion.put(mapping[i++], mapping[i++]);
                     }
-                    for (MethodNode method : node.methods) {
-                        if (method.instructions == null) {
-                            continue;
-                        }
-                        for (AbstractInsnNode insn : method.instructions) {
-                            if (insn instanceof LineNumberNode) {
-                                int old = ((LineNumberNode)insn).line;
-                                Integer newLineNumber = lineNumberConversion.get(old);
-                                if (newLineNumber != null) {
-                                    ((LineNumberNode)insn).line = newLineNumber;
-                                }
-                            }
-                        }
-                    }
                 }
 
-                ClassReader reader = readers.get(node.name);
                 ClassWriter writer = new ClassWriter(reader, 0);
-                node.accept(writer);
-                zipOut.putNextEntry(new ZipEntry(node.name + ".class"));
-                zipOut.write(writer.toByteArray());
+                reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String name, String descriptor, String signature,
+                            String[] exceptions) {
+                        return new MethodVisitor(this.api, super.visitMethod(access, name, descriptor, signature, exceptions)) {
+                            @Override
+                            public void visitLineNumber(int line, Label start) {
+                                if (lineNumberConversion == null) {
+                                    super.visitLineNumber(line, start);
+                                } else {
+                                    Integer newLineNumber = lineNumberConversion.get(line);
+                                    if (newLineNumber == null) {
+                                        super.visitLineNumber(line, start);
+                                    } else {
+                                        super.visitLineNumber(newLineNumber.intValue(), start);
+                                    }
+                                }
+                            }
+                        };
+                    }
+
+                    @Override
+                    public void visitSource(String source, String debug) {
+                        super.visitSource(node.sourceFile, debug);
+                    }
+                }, 0);
+                zipOutputStream.write(writer.toByteArray());
             }
         }
+        Files.move(intermediary, lineReplaceTarget, StandardCopyOption.REPLACE_EXISTING);
+        nameToNode.clear();
     }
 }

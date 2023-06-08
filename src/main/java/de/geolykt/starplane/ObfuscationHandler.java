@@ -4,27 +4,23 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeSet;
-import java.util.jar.JarFile;
+import java.util.Locale;
+import java.util.Set;
 import java.util.zip.Adler32;
 import java.util.zip.CheckedInputStream;
 import java.util.zip.ZipEntry;
@@ -34,9 +30,9 @@ import java.util.zip.ZipOutputStream;
 import org.gradle.internal.impldep.com.google.common.base.Objects;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,40 +40,47 @@ import net.fabricmc.tinyremapper.OutputConsumerPath;
 import net.fabricmc.tinyremapper.TinyRemapper;
 import net.fabricmc.tinyremapper.extension.mixin.MixinExtension;
 
-import de.geolykt.starloader.deobf.ClassWrapper;
-import de.geolykt.starloader.deobf.IntermediaryGenerator;
-import de.geolykt.starloader.deobf.MethodReference;
-import de.geolykt.starloader.deobf.Oaktree;
-import de.geolykt.starloader.deobf.remapper.Remapper;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformFailure;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformScope;
-import de.geolykt.starplane.remapping.MultiMappingProvider;
 import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
-import de.geolykt.starplane.remapping.StarplaneMappingsProvider;
 
 public class ObfuscationHandler {
 
-    private static final String INTERMEDIARY_FILE_NAME = "slintermediary.tiny";
-    private static final String STARMAP_FILE_NAME = "spstarmap.tiny";
     private static final byte[] IO_BUFFER = new byte[4096];
     private static final Logger LOGGER = LoggerFactory.getLogger(ObfuscationHandler.class);
-
     @Nullable
     private final String rasContent;
-
     @NotNull
     private final Path cacheDir;
-
     public boolean didRefresh = false;
-
     @NotNull
     private final Path projectDir;
+    @NotNull
+    private final String gameName;
+    @NotNull
+    private final String expectedJarPath;
+    @NotNull
+    private final List<@NotNull String> includes;
 
-    public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String rasContent) {
+    public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @NotNull String gameName, @NotNull String jarPath, @Nullable String rasContent, @NotNull List<@NotNull String> includes) {
         this.cacheDir = cacheDir;
         this.projectDir = projectDir;
+        this.gameName = gameName;
+        this.expectedJarPath = jarPath;
         this.rasContent = rasContent;
+        this.includes = includes;
+    }
+
+    @NotNull
+    public Path getRuntimeRemappedJar() {
+        getTransformedGalimulatorJar();
+        return this.cacheDir.resolve(this.gameName.toLowerCase(Locale.ROOT) + "-remapped-rt.jar");
+    }
+
+    @NotNull
+    public String getGameName() {
+        return this.gameName;
     }
 
     @NotNull
@@ -116,6 +119,68 @@ public class ObfuscationHandler {
             e.printStackTrace();
         }
 
+        List<@NotNull Path> cleanGameJars = new ArrayList<>();
+        Set<@NotNull String> remainingJars = new LinkedHashSet<>();
+        remainingJars.add(this.expectedJarPath);
+        remainingJars.addAll(this.includes);
+        int extraHash = 0;
+        for (String jar : remainingJars) {
+            Path cleanJar = this.projectDir.resolve(jar);
+            if (Files.notExists(cleanJar)) {
+                LOGGER.info("Include jar at " + cleanJar.toAbsolutePath() + " not found.");
+                cleanJar = this.cacheDir.resolve(jar);
+                if (Files.notExists(cleanJar)) {
+                    LOGGER.info("Include jar at " + cleanJar.toAbsolutePath() + " not found.");
+                    cleanJar = this.projectDir.resolve(jar.substring(jar.lastIndexOf('/') + 1));
+                    if (jar.codePointBefore(jar.length()) == '/' || Files.notExists(cleanJar)) {
+                        LOGGER.info("Include jar at " + cleanJar.toAbsolutePath() + " not found.");
+                        File gameDir = Utils.getGameDir(this.gameName);
+                        if (gameDir == null || !gameDir.exists()) {
+                            LOGGER.error("Unable to resolve game directory!");
+                            throw new IllegalStateException("Cannot resolve dependency include " + jar);
+                        }
+                        cleanJar = gameDir.toPath().resolve(jar);
+                        if (Files.notExists(cleanJar)) {
+                            LOGGER.error(
+                                    "Unable to resolve include jar file {} (was able to resolve the potential directory at '{}' though)!", jar, gameDir);
+                            throw new IllegalStateException("Cannot resolve dependencies");
+                        }
+                    }
+                }
+            }
+
+            LOGGER.info("Include jar found at {}", cleanJar.toAbsolutePath());
+
+            if (jar.codePointBefore(jar.length()) == '/') {
+                try {
+                    Path[] jars = Files.list(cleanJar.toAbsolutePath()).toArray(Path[]::new);
+                    for (Path subdirJar : jars) {
+                        extraHash ^= subdirJar.toAbsolutePath().hashCode();
+                        try {
+                            extraHash ^= Files.getLastModifiedTime(subdirJar).toMillis();
+                        } catch (Exception ignore) {
+                            // NOP
+                        }
+                        cleanGameJars.add(subdirJar.toAbsolutePath());
+                    }
+                } catch (IOException e) {
+                    LOGGER.error("Unable to resolve include jar file {} as it was not possible to list sub-directories!", jar, e);
+                    throw new IllegalStateException("Cannot resolve dependencies", e);
+                }
+            } else {
+                extraHash ^= cleanJar.toAbsolutePath().hashCode();
+                try {
+                    extraHash ^= Files.getLastModifiedTime(cleanJar).toMillis();
+                } catch (Exception ignore) {
+                    // NOP
+                }
+                cleanGameJars.add(cleanJar.toAbsolutePath());
+            }
+        }
+
+        LOGGER.info("Using the base game jar(s) found at {}", cleanGameJars);
+        currentHash += "-" + Integer.toHexString(extraHash);
+
         // Check whether the effects of the access widener needs to be computed anew.
         if (Files.exists(awHash)) {
             try (BufferedReader br = Files.newBufferedReader(awHash, StandardCharsets.UTF_8)) {
@@ -132,8 +197,8 @@ public class ObfuscationHandler {
             recomputeAw = true; // AW file newly created
         }
 
-        final Path runAccess = this.cacheDir.resolve("galimulator-remapped-rt.jar");
-        final Path compileAccess = this.cacheDir.resolve("galimulator-remapped.jar");
+        final Path runAccess = this.cacheDir.resolve(this.gameName.toLowerCase(Locale.ROOT) + "-remapped-rt.jar");
+        final Path compileAccess = this.cacheDir.resolve(this.gameName.toLowerCase(Locale.ROOT) + "game-remapped.jar");
 
         if (Files.isRegularFile(runAccess) && Files.isRegularFile(compileAccess) && !Boolean.getBoolean("de.geolykt.starplane.nocache") && !recomputeAw) {
             return compileAccess;
@@ -141,208 +206,60 @@ public class ObfuscationHandler {
 
         didRefresh = true;
 
-        // Now, somehow obtain the galim jar
-        File cleanGalimJar = new File(this.projectDir.toFile(), "galimulator-desktop.jar");
-        if (!cleanGalimJar.exists()) {
-            LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
-            cleanGalimJar = new File(this.cacheDir.toFile(), "galimulator-desktop.jar");
-            if (!cleanGalimJar.exists()) {
-                LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
-                // obtain galimulator jar
-                File galimDir = Utils.getGameDir("Galimulator");
-                if (galimDir == null || !galimDir.exists()) {
-                    LOGGER.error("Unable to resolve galimulator directory!");
-                    throw new IllegalStateException("Cannot resolve dependencies");
-                }
-                cleanGalimJar = new File(galimDir, "jar/galimulator-desktop.jar");
-                if (!cleanGalimJar.exists()) {
-                    LOGGER.error(
-                            "Unable to resolve galimulator jar file (was able to resolve the potential directory though)!");
-                    throw new IllegalStateException("Cannot resolve dependencies");
-                }
-            }
-        }
-        LOGGER.info("Using the base galimulator jar found at " + cleanGalimJar.getAbsolutePath());
-
-        Path map = this.cacheDir.resolve(INTERMEDIARY_FILE_NAME);
-        Oaktree deobfuscator = new Oaktree();
         try {
             long start = System.currentTimeMillis();
-            JarFile jar = new JarFile(cleanGalimJar);
-            deobfuscator.index(jar);
-            jar.close();
-            Map<String, ClassNode> nameToNode = new HashMap<>();
-            for (ClassNode node : deobfuscator.getClassNodesDirectly()) {
-                nameToNode.put(node.name, node);
-            }
-            LOGGER.info("Loaded input jar in " + (System.currentTimeMillis() - start) + " ms.");
-            long startDeobf = System.currentTimeMillis();
-            deobfuscator.fixInnerClasses();
-            deobfuscator.fixParameterLVT();
-            deobfuscator.guessFieldGenerics();
-            addSignatures(deobfuscator.getClassNodesDirectly(), nameToNode, deobfuscator.analyseLikelyMethodReturnCollectionGenerics());
-            Map<MethodReference, ClassWrapper> methods = new HashMap<>();
-            deobfuscator.lambdaStreamGenericSignatureGuessing(null, methods);
-            addSignatures(deobfuscator.getClassNodesDirectly(), nameToNode, methods);
-            deobfuscator.inferMethodGenerics();
-            deobfuscator.inferConstructorGenerics();
-            deobfuscator.fixForeachOnArray();
-            deobfuscator.fixComparators(true);
-            deobfuscator.guessAnonymousInnerClasses();
 
-            LOGGER.info("Deobfuscated classes in " + (System.currentTimeMillis() - startDeobf) + " ms.");
-            long startIntermediarisation = System.currentTimeMillis();
-
-            IntermediaryGenerator generator = new IntermediaryGenerator(map, null,
-                    deobfuscator.getClassNodesDirectly());
-            generator.useAlternateClassNaming(!Boolean.getBoolean("de.geolykt.starplane.oldnames"));
-            generator.remapClassesV2(true);
-            deobfuscator.fixSwitchMaps();
-            generator.doProposeEnumFieldsV2();
-            generator.remapGetters();
-            generator.deobfuscate();
-
-            try {
-                Remapper remapper = new Remapper();
-                remapper.addTargets(deobfuscator.getClassNodesDirectly());
-                long startSlStarmap = System.currentTimeMillis();
-                Autodeobf deobf = new Autodeobf(deobfuscator.getClassNodesDirectly(), remapper);
-                try (Writer writer = Files.newBufferedWriter(this.cacheDir.resolve(STARMAP_FILE_NAME), StandardOpenOption.CREATE)) {
-                    writer.write("v1\tintermediary\tnamed\n");
-                    deobf.runAll(writer);
-                    for (Map.Entry<String, String> e : remapper.fixICNNames(new StringBuilder()).entrySet()) {
-                        writer.write("CLASS\t");
-                        writer.write(e.getKey());
-                        writer.write('\t');
-                        writer.write(e.getValue());
-                        writer.write('\n');
-                    }
-                    writer.flush();
-                    remapper.process();
-                }
-                LOGGER.info("Computed spStarmap in " + (System.currentTimeMillis() - startSlStarmap) + " ms.");
-            } catch (Exception e) {
-                throw new RuntimeException("Cannot write mappings", e);
-            }
-
-            deobfuscator.invalidateNameCaches();
-
-            /*
-            System.out.println("Deobfuscator found " + deobfuscator.guessAnonymousClasses().size() + " anon classes agressively");
-            for (Map.Entry<String, MethodReference> e : deobfuscator.guessAnonymousClasses().entrySet()) {
-                ClassNode node = nameToNode.get(e.getKey());
-                if (!node.name.startsWith("snodd")) {
-                    continue;
-                }
-                MethodReference mref = e.getValue();
-                node.outerClass = mref.getOwner();
-                node.outerMethod = mref.getName();
-                node.outerMethodDesc = mref.getDesc();
-                node.innerClasses.add(new InnerClassNode(node.name, mref.getOwner(), null, 0));
-            }*/
-            /*
-            {
-                Map<String, String> mappedNames = deobfuscator.getProposedLocalClassNames("InnerClass", (outer, inner) -> {
-                    return inner.startsWith("snod");
-                }, true);
-                Remapper remapper = new Remapper();
-                remapper.addTargets(deobfuscator.getClassNodesDirectly());
-                remapper.remapClassNames(mappedNames);
-                remapper.process();
-                try (Writer writer = Files.newBufferedWriter(this.cacheDir.resolve(POSTINTERMEDIARY_FILE_NAME), StandardOpenOption.CREATE)) {
-                    writer.write("v1\tintermediary\tnamed\n");
-                    for (Map.Entry<String, String> entry : mappedNames.entrySet()) {
-                        writer.write("CLASS ");
-                        writer.write(entry.getKey());
-                        writer.write(' ');
-                        writer.write(entry.getValue());
-                        writer.write('\n');
-                    }
-                }
-                Logger.info("Deobfuscated " + mappedNames.size() + " local classes");
-            }
-            */
-
-            deobfuscator.applyInnerclasses();
-
-            LOGGER.info("Computed intermediaries of classes in " + (System.currentTimeMillis() - startIntermediarisation) + " ms.");
-
-            if (rasInfo == null) {
-                try (OutputStream os = Files.newOutputStream(compileAccess)) {
-                    assert os != null;
-                    deobfuscator.write(os, cleanGalimJar.toPath());
-                }
-                // Compile-time Access = Runtime Access
-                Files.copy(compileAccess, runAccess, StandardCopyOption.REPLACE_EXISTING);
-
-                try (BufferedWriter bw = Files.newBufferedWriter(awHash, StandardCharsets.UTF_8)) {
-                    bw.write("null-");
-                    bw.write(getStarplaneChecksum());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            } else {
-                // Duplicate all nodes
-                List<ClassNode> runNodes = new ArrayList<>();
-                Map<String, ClassNode> compileNodes = new HashMap<>();
-
-                for (ClassNode node : deobfuscator.getClassNodesDirectly()) {
-                    // Apply RAS
-                    try {
-                        if (node == null) {
-                            continue;
-                        }
-                        rasInfo.accept(node);
-                    } catch (RASTransformFailure e) {
-                        LOGGER.error("Unable to apply RAS on class {}", node.name, e);
-                    }
-
-                    ClassNode duplicate = new ClassNode();
-                    node.accept(duplicate);
-                    runNodes.add(duplicate);
-                    compileNodes.put(node.name, node);
-                }
-
-                try (BufferedWriter bw = Files.newBufferedWriter(awHash, StandardCharsets.UTF_8)) {
-                    bw.write(currentHash);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-                // Write compile-time nodes to disk
-                try (OutputStream os = Files.newOutputStream(compileAccess)) {
-                    assert os != null;
-                    deobfuscator.write(os, cleanGalimJar.toPath());
-                }
-
-                // Write runtime nodes to disk
-                try (ZipOutputStream os = new ZipOutputStream(Files.newOutputStream(runAccess), StandardCharsets.UTF_8)) {
-                    // Copy resources
-                    try (ZipInputStream zipIn = new ZipInputStream(new FileInputStream(cleanGalimJar))) {
-                        for (ZipEntry entry = zipIn.getNextEntry(); entry != null; entry = zipIn.getNextEntry()) {
-                            if (entry.getName().endsWith(".class")) {
-                                // Do not copy classes
+            try (ZipOutputStream ros = new ZipOutputStream(Files.newOutputStream(runAccess), StandardCharsets.UTF_8);
+                    ZipOutputStream cos = new ZipOutputStream(Files.newOutputStream(compileAccess), StandardCharsets.UTF_8)) {
+                Set<String> copiedEntries = new HashSet<>();
+                for (Path inJar : cleanGameJars) {
+                    try (ZipInputStream in = new ZipInputStream(Files.newInputStream(inJar), StandardCharsets.UTF_8)) {
+                        for (ZipEntry entry = in.getNextEntry(); entry != null; entry = in.getNextEntry()) {
+                            if (!copiedEntries.add(entry.getName())) {
                                 continue;
                             }
-                            os.putNextEntry(entry);
-                            byte[] b = new byte[4096];
-                            int read;
-                            while ((read = zipIn.read(b)) != -1) {
-                                os.write(b, 0, read);
+                            ZipEntry clone = new ZipEntry(entry);
+                            clone.setCompressedSize(-1); // Different compression algos may yield different compressed entry sizes
+                            ros.putNextEntry(clone);
+                            cos.putNextEntry(new ZipEntry(clone));
+                            if (entry.getName().endsWith(".class")) {
+                                ClassReader reader = new ClassReader(in);
+                                ClassNode node = new ClassNode();
+                                reader.accept(node, 0);
+                                // Write runtime access jar (i.e. no RAS transforms, those will get applied by SLL)
+                                ClassWriter writer = new ClassWriter(reader, 0);
+                                node.accept(writer);
+                                ros.write(writer.toByteArray());
+                                // Write compile access jar
+                                writer = new ClassWriter(reader, 0);
+                                if (rasInfo != null) {
+                                    try {
+                                        rasInfo.accept(node);
+                                    } catch (RASTransformFailure e) {
+                                        LOGGER.error("Unable to apply RAS transform for node {}", node.name, e);
+                                    }
+                                }
+                                node.accept(writer);
+                                cos.write(writer.toByteArray());
+                            } else {
+                                byte[] b = new byte[4096];
+                                int read;
+                                while ((read = in.read(b)) != -1) {
+                                    ros.write(b, 0, read);
+                                    cos.write(b, 0, read);
+                                }
                             }
                         }
                     }
-                    // Write the actual nodes - in alphabetic order to preserve consistency
-                    TreeSet<ClassNode> sortedNodes = new TreeSet<>((node1, node2) -> node1.name.compareTo(node2.name));
-                    sortedNodes.addAll(runNodes);
-                    for (ClassNode node : sortedNodes) {
-                        ClassWriter writer = new ClassWriter(0);
-                        node.accept(writer);
-                        os.putNextEntry(new ZipEntry(node.name + ".class"));
-                        os.write(writer.toByteArray());
-                    }
                 }
             }
+
+            try (BufferedWriter bw = Files.newBufferedWriter(awHash, StandardCharsets.UTF_8)) {
+                bw.write(currentHash);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
             LOGGER.info("Finished transforming classes in " + (System.currentTimeMillis() - start) + " ms.");
         } catch (IOException e) {
             throw new IllegalStateException(e);
@@ -352,7 +269,7 @@ public class ObfuscationHandler {
     }
 
     private static String getStarplaneChecksum() throws IOException {
-        try (InputStream autodeobfClass = Autodeobf.class.getClassLoader().getResourceAsStream("de/geolykt/starplane/Autodeobf.class");
+        try (InputStream autodeobfClass = ObfuscationHandler.class.getClassLoader().getResourceAsStream("de/geolykt/starplane/ObfuscationHandler.class");
                 CheckedInputStream checkedIn = new CheckedInputStream(autodeobfClass, new Adler32())) {
             while (checkedIn.read(IO_BUFFER) != -1); // read the entire input stream until it is exhausted
             return Long.toString(checkedIn.getChecksum().getValue());
@@ -373,39 +290,11 @@ public class ObfuscationHandler {
         return hex.toString();
     }
 
-    private void addSignatures(List<ClassNode> nodes, Map<String, ClassNode> nameToNode,
-            Map<MethodReference, ClassWrapper> signatures) {
-        StringBuilder builder = new StringBuilder();
-        for (ClassNode node : nodes) {
-            for (MethodNode method : node.methods) {
-                if (method.signature == null) {
-                    ClassWrapper newSignature = signatures.get(new MethodReference(node.name, method));
-                    if (newSignature == null) {
-                        continue;
-                    }
-                    builder.append(method.desc, 0, method.desc.length() - 1);
-                    builder.append("<L");
-                    builder.append(newSignature.getName());
-                    builder.append(";>;");
-                    method.signature = builder.toString();
-                    builder.setLength(0);
-                }
-            }
-        }
-    }
-
-    public void reobfuscateJar(@NotNull Path jarPath, @NotNull Path starmappedGalimulator,
+    public void reobfuscateJar(@NotNull Path jarPath, @NotNull Path mappedGameJar,
             @NotNull Collection<@NotNull Path> alsoInclude) throws IOException {
-        Path spstarmap = this.cacheDir.resolve(STARMAP_FILE_NAME);
-        Path slintermediary = this.cacheDir.resolve(INTERMEDIARY_FILE_NAME);
 
         TinyRemapper tinyRemapper = TinyRemapper.newRemapper()
-                .withMappings(
-                        new MultiMappingProvider(
-                                new StarplaneMappingsProvider(slintermediary, true),
-                                new StarplaneMappingsProvider(spstarmap, true)
-                        )
-                ).extension(new StarplaneAnnotationRemapper())
+                .extension(new StarplaneAnnotationRemapper())
                 .extension(new MixinExtension())
                 .keepInputData(true)
                 .build();
@@ -414,7 +303,7 @@ public class ObfuscationHandler {
         try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(intermediaryBuild).build()) {
             LOGGER.info("Reobfuscating... (reading inputs)");
             tinyRemapper.readInputs(jarPath);
-            tinyRemapper.readClassPath(starmappedGalimulator);
+            tinyRemapper.readClassPath(mappedGameJar);
             outputConsumer.addNonClassFiles(jarPath, tinyRemapper, Collections.singletonList(SimpleRASRemapper.INSTANCE));
             for (Path additionalInput : alsoInclude) {
                 tinyRemapper.readInputs(additionalInput);

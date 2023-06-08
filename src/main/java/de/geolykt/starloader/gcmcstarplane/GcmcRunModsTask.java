@@ -1,4 +1,4 @@
-package de.geolykt.starloader.gslstarplane;
+package de.geolykt.starloader.gcmcstarplane;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,15 +25,15 @@ import org.json.JSONArray;
 import de.geolykt.starplane.Utils;
 
 @DisableCachingByDefault(because = "Does not make sense")
-public class GslRunModsTask extends JavaExec {
+public class GcmcRunModsTask extends JavaExec {
     @NotNull
     private final List<Object> extraMods = new ArrayList<>();
 
-    public GslRunModsTask() {
+    public GcmcRunModsTask() {
         super.dependsOn("deployMods");
         super.dependsOn("jar");
         super.setDescription("Run the development environment.");
-        super.setGroup(GslStarplanePlugin.TASK_GROUP);
+        super.setGroup(GcmcStarplanePlugin.TASK_GROUP);
         super.getMainClass().set("de.geolykt.starloader.launcher.IDELauncher");
         super.setIgnoreExitValue(true);
         super.systemProperty("de.geolykt.starloader.launcher.IDELauncher.inlineStarplaneAnnotations", true);
@@ -85,7 +85,7 @@ public class GslRunModsTask extends JavaExec {
     }
 
     private void setupLauncherProperties() {
-        super.jvmArgs(GslStarplanePlugin.getBootPath(super.getProject()));
+        super.jvmArgs(GcmcStarplanePlugin.getBootPath(super.getProject()));
         JSONArray modURLs = new JSONArray();
         for (Path p : getModPaths()) {
             JSONArray mod = new JSONArray();
@@ -100,7 +100,7 @@ public class GslRunModsTask extends JavaExec {
     }
 
     private void resolveClasspath() {
-        super.classpath(super.getProject().getConfigurations().getByName(GslStarplanePlugin.DEV_RUNTIME_CONFIGURATION_NAME).resolve());
+        super.classpath(super.getProject().getConfigurations().getByName(GcmcStarplanePlugin.DEV_RUNTIME_CONFIGURATION_NAME).resolve());
     }
 
     private void linkDataFolder() {

@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'de.geolykt.starloader'
-archivesBaseName = 'gsl-starplane'
+archivesBaseName = 'gcmc-starplane'
 def baseVersion = '0.1.0'
 
 targetCompatibility = compileJava.targetCompatibility = '11' // QF is Java 11+ - so we have little other choices for the time being
@@ -34,7 +34,7 @@ dependencies {
     implementation 'org.json:json:20230227'
 
     // https://mvnrepository.com/artifact/net.fabricmc/tiny-remapper
-    implementation 'net.fabricmc:tiny-remapper:0.8.6'
+    implementation 'net.fabricmc:tiny-remapper:0.8.6+local'
     // https://mvnrepository.com/artifact/org.quiltmc/quiltflower
     implementation 'org.quiltmc:quiltflower:1.9.0'
 
@@ -48,7 +48,7 @@ gradlePlugin {
         gslStarplanePlugin {
             id = project.archivesBaseName
             version = baseVersion
-            implementationClass = 'de.geolykt.starloader.gslstarplane.GslStarplanePlugin'
+            implementationClass = 'de.geolykt.starloader.gcmcstarplane.GcmcStarplanePlugin'
         }
     }
 }
