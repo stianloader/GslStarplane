@@ -65,14 +65,14 @@ publishing {
 
             from components['java']
 
-            //artifact sourcesJar
-            //artifact javadocJar
+            artifact sourcesJar
+            artifact javadocJar
         }
     }
     repositories {
         mavenLocal()
-        /*maven {
-            url = "/home/Geolykt/maven-alt/repo/"
-        }*/
+        maven {
+            url = "/home/geolykt/.m2/maven-alt/"
+        }
     }
 }

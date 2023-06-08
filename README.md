@@ -42,18 +42,42 @@ pluginManagement {
             name = 'Geolykt'
             url = 'https://geolykt.de/maven/'
         }
-        maven {
-            name 'fabric'
-            url 'https://maven.fabricmc.net/'
-        }
     }
 }
 ```
+
+GcmcStarplane is meant to work in a game-independent manner. This means it can
+(in theory) be used to mod several (albeit one at a time) games, though the
+game needs to be on steam.
+
+To declare which game you want to mod you must declare it like below:
+
+```groovy
+starplane {
+    game(1169040, "Necesse", "Necesse.jar", "lib/")
+    mainClass = "StartClient"
+}
+```
+
+`1169040` is the game's app id on steam. `1169040` would be the app id for necesse,
+`808100` is the appid of galimulator.
+
+The second argument (`Necesse`) is the steam app name. More concretely, this is the
+name of the folder of the game within the steam directory.
+
+The third argument is the game's central jar. For necesse it is `Necesse.jar`, for
+galimulator it'd be `jar/galimulator-desktop.jar`.
+
+All arguments after that are optional, and represent additional jars you want to use
+within the game. Strings that end with a slash (`/`) denote directories. All jars
+within the directory are then considered as being part of the game.
 
 And that is it! Unfortunately you won't be able to use the plugin for much
 with such a setup. So continue reading!
 
 ## Specifing reversible access setters
+
+**WARNING:** RAS is a very niche file format and is only supported by SLL.
 
 **WARNING:** Reversible access setters are as dangerous as they are simple to
 use. Changing access of a method could make methods that normally would be
@@ -78,71 +102,33 @@ and transitive reversible access setters are ignored.
 **Declaration of reversible access setters to starplane is independent
 from the Starloader-launcher declaration of reversible access setters!**
 
-## The `galimulatorDependencies` configuration
+## The `gameDependencies` configuration
 
-Starplane automatically strips dependencies it can find from the galimulator
-jar. This may sound unintuitive but has the benefit of reducing the amount
+Starplane automatically strips dependencies it can find from the game
+jar(-s). This may sound unintuitive but has the benefit of reducing the amount
 of classes that need to be decompiled and also provides (if configured
 properly) javadocs and sources in the IDE, leading to a more comfortable
 development experience.
 
 The dependencies that need to be stripped can be configured through the
-`galimulatorDependencies` configuration, however it is advised that the
+`gameDependencies` configuration, however it is advised that the
 configuration is not touched. However, by default dependencies which are in the
-`galimulatorDependencies` configuration are not on the compile classpath.
+`gameDependencies` configuration are not on the compile classpath.
 To change this, `compileOnlyApi` can be made to extend from
-`galimulatorDependencies`. In practice this can be done by inserting
+`gameDependencies`. In practice this can be done by inserting
 
 ```groovy
 configurations {
-    compileOnlyApi.extendsFrom(galimulatorDependencies)
+    compileOnlyApi.extendsFrom(gameDependencies)
 }
 ```
 
 in the project buildscript.
 
-## The `remapJar` task
-
-The `remapJar` task remaps all references of deobfuscated members to use
-the obfuscated names instead. It produces the jar that can be used outside
-the development environment and which you can freely distribute
-(should there not be other limitations).
-
-The `remapJar` task extends the `jar` task, which means that it can
-be configured similar to `jar`. However, unlike the `jar` task
-you probably want to define the `from` inputs.
-
-Note: It is recommended to set the `archiveClassifier` of the
-remapped jar as otherwise the `jar` task cannot be cached.
-
-Including a jar will insert the jar in the built jar root.
-This is probably not intended behaviour for you, so you'd need to decompress
-is beforehand. Alternatively, the `fromJar` method can be used to include
-jars. Furthermore, `fromJar` implicitly adds dependencies on Tasks if the input
-is a task. The below example shows just that.
-
-The recommended configuration of the `remapJar` task is follows:
-
-```groovy
-remapJar {
-    archiveClassifier = 'remapped'
-    fromJar jar
-}
-```
-
-Sometimes muscle memory gets the better of you and you are still
-acustomed to using `build` to create jars. Unfortunately, by default, `build`
-does not create a remapped jar. In order for the `build` task to also remap,
-one can make `build` depend on `remapJar`. In practice this would look as
-follows:
-
-```groovy
-build {
-    dependsOn remapJar
-}
-```
-
 ## Defining the mods in the development environment
+
+**NOTE:** This section only applies to Starloader-launcher mods. Mods that are loaded
+by the game's modding engine cannot be imported like this.
 
 The mods that are run in the dev env (which is started through the `runMods`
 task that will be talked about later on) can be selected by configuring the
@@ -224,13 +210,6 @@ debugging difficult. To counteract this, the `genEclipseRuns` task generates
 the `runMods.launch` file that can be used to execute the development
 environment right within your IDE with all the extras your IDE provides.
 
-**NOTE:** In most cases the generated \*.launch files won't work as necessary
-tasks (such as negating AWs) aren't run.
-To remedy this issue, improvements need to be done on the Starloader-launcher.
-Such improvements would also mean the end of whacky workarounds such as
-gslStarplane generating runtime-access and compile-time access jars.
-With negated AWs only one slim compile-time access jar would be needed.
-
 ## Selecting the Mod loader (the `devRuntime` configuration)
 
 As of now, only the Starloader launcher can be used as a mod loader (though
@@ -243,7 +222,7 @@ for the dev env to work. The Starloader Launcher can thus be declared as follows
 ```groovy
 dependencies {
     // [...]
-    devRuntime "de.geolykt.starloader:launcher:4.0.0-20230520"
+    devRuntime "de.geolykt.starloader:launcher:4.0.0-20230608"
     // [...]
 }
 ```
@@ -260,16 +239,16 @@ result in mods not properly loading or other classloading issues.
 
 ## Selecting the Mappings
 
-At the moment only spStarmap ontop of slintermediary can be used.
-In the (far) future other variants of deobfuscation mappings (such as mmStarmap)
-may get supported.
+GcmcStarplane does not support deobfuscation mappings at the moment.
+Once gslStarplane and GcmcStarplane are joined together, mappings would
+get resolved in a more dynamic and user-configurable system.
 
 ## Decompilation
 
-gslStarplane decompiles Galimulator with Quiltflower, a Fernflower-based
+GcmcStarplane decompiles your game jar with Quiltflower, a Fernflower-based
 decompiler. The dependencies added on the decompilation classpath are
-controlled by the `galimulatorDependencies`. Furthermore, gslStarplane always
-decompiles the stripped galimulator jar with compile-time access.
+controlled by the `gameDependencies`. Furthermore, GcmcStarplane always
+decompiles the stripped game jar with compile-time access.
 
 The original line mappings are visible in the decompiled output,
 but starplane automatically changes the line mappings of the runtime and
@@ -277,15 +256,13 @@ the stripped compile-time jars to reflect the line mappings of the decompiled
 output.
 
 **NOTE**: I am aware that QuiltMC (the organisation behind Quiltflower)
-had a serious internal disruption starting from the 20th April of 2023. Due
-to the organisation seemingly not being aware of the importance of good wording
-(please: be aware that words are the most important thing ever if you intend
-to intend to depos someone. Using wording that can only be described as counter-
-productive is stupid), I have been banned on Quilt's toolchain discord. I thus
-deem it likely that I have been completely banned from the entirety of the quilt
-project. The current strategy is to just wait and hope that they forget that I
-am banned. Should that not work, Quiltflower will probably get forked by us (or
-we use a fork from an organisation that suffered a similar fate).
+had a serious internal disruption starting from the 20th April of 2023.
+Due to reasons I wouldn't want to talk about here, I have been banned on Quilt's
+toolchain discord. I thus deem it likely that I have been completely banned from
+the entirety of the quilt project. The current strategy is to just wait and
+hope that they forget that I am banned. Should that not work, Quiltflower will
+probably get forked by us (or we use a fork from an organisation that suffered
+a similar fate).
 
 ## Eclipse external null annotations
 
@@ -324,12 +301,3 @@ eclipse {
     }
 }
 ```
-
-## Roadmap
-
-Currently it is planned to offer Starplane as Eclipse and IntelliJ plugins,
-however due to the required effort needed to learn their plugin APIs this
-will only happen in the far future - if ever.
-
-A Maven integration is unlikely due to it apparently lacking the ability
-to add dependencies programatically without touching the POM.
