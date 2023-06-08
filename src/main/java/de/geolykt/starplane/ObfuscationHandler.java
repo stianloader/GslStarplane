@@ -10,12 +10,9 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -36,14 +33,9 @@ import org.objectweb.asm.tree.ClassNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.fabricmc.tinyremapper.OutputConsumerPath;
-import net.fabricmc.tinyremapper.TinyRemapper;
-import net.fabricmc.tinyremapper.extension.mixin.MixinExtension;
-
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformFailure;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformScope;
-import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
 
 public class ObfuscationHandler {
 
@@ -288,36 +280,6 @@ public class ObfuscationHandler {
             hex.append(Integer.toHexString(x));
         }
         return hex.toString();
-    }
-
-    public void reobfuscateJar(@NotNull Path jarPath, @NotNull Path mappedGameJar,
-            @NotNull Collection<@NotNull Path> alsoInclude) throws IOException {
-
-        TinyRemapper tinyRemapper = TinyRemapper.newRemapper()
-                .extension(new StarplaneAnnotationRemapper())
-                .extension(new MixinExtension())
-                .keepInputData(true)
-                .build();
-
-        Path intermediaryBuild = this.cacheDir.resolve("temporaryBuild.jar");
-        try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(intermediaryBuild).build()) {
-            LOGGER.info("Reobfuscating... (reading inputs)");
-            tinyRemapper.readInputs(jarPath);
-            tinyRemapper.readClassPath(mappedGameJar);
-            outputConsumer.addNonClassFiles(jarPath, tinyRemapper, Collections.singletonList(SimpleRASRemapper.INSTANCE));
-            for (Path additionalInput : alsoInclude) {
-                tinyRemapper.readInputs(additionalInput);
-                outputConsumer.addNonClassFiles(additionalInput, tinyRemapper, Collections.singletonList(SimpleRASRemapper.INSTANCE));
-            }
-            LOGGER.info("Reobfuscating... (applying)");
-            tinyRemapper.apply(outputConsumer);
-        } catch (IOException t) {
-            throw new RuntimeException(t);
-        } finally {
-            tinyRemapper.finish();
-        }
-        Files.move(intermediaryBuild, jarPath, StandardCopyOption.REPLACE_EXISTING);
-        LOGGER.info("Reobfuscating... (done)");
     }
 
     @Override

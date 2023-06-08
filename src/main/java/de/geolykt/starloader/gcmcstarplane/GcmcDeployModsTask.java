@@ -6,19 +6,17 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.gradle.api.Task;
-import org.gradle.api.UncheckedIOException;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.component.SoftwareComponent;
@@ -33,12 +31,7 @@ import org.gradle.work.DisableCachingByDefault;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 
-import net.fabricmc.tinyremapper.OutputConsumerPath;
-import net.fabricmc.tinyremapper.TinyRemapper;
-
-import de.geolykt.starloader.ras.AbstractTinyRASRemapper;
 import de.geolykt.starplane.Utils;
-import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
 
 @DisableCachingByDefault(because = "Not worth it")
 public class GcmcDeployModsTask extends ConventionTask {
@@ -174,35 +167,10 @@ public class GcmcDeployModsTask extends ConventionTask {
                 } else {
                     target = modDirectory.resolve(target);
                 }
-                Files.deleteIfExists(target);
-                this.transform(mod, target);
+                Files.move(mod, target, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }
-    }
-
-    private void transform(@NotNull Path source, @NotNull Path target) {
-        getLogger().info("Transforming target " + target + " from " + source);
-        // Technically TR isn't needed for that but we already have this system in place
-        TinyRemapper tinyRemapper = TinyRemapper.newRemapper()
-                .extension(new StarplaneAnnotationRemapper())
-                .keepInputData(false)
-                .build();
-
-        try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(target).build()) {
-            tinyRemapper.readInputs(source);
-            outputConsumer.addNonClassFiles(source, tinyRemapper, Arrays.asList(new AbstractTinyRASRemapper() {
-                @Override
-                public boolean canTransform(TinyRemapper remapper, Path relativePath) {
-                    return relativePath.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ras");
-                }
-            }));
-            tinyRemapper.apply(outputConsumer);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        } finally {
-            tinyRemapper.finish();
         }
     }
 }
