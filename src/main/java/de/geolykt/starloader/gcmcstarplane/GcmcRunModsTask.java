@@ -29,6 +29,8 @@ public class GcmcRunModsTask extends JavaExec {
     @NotNull
     private final List<Object> extraMods = new ArrayList<>();
 
+    private final GcmcExtension extension = getProject().getExtensions().getByType(GcmcExtension.class);
+
     public GcmcRunModsTask() {
         super.dependsOn("deployMods");
         super.dependsOn("jar");
@@ -120,10 +122,60 @@ public class GcmcRunModsTask extends JavaExec {
         }
     }
 
+    private void linkNecesseFiles() {
+        Path cacheDir = GcmcStarplanePlugin.OBF_HANDLERS.get(super.getProject()).getTransformedGalimulatorJar().toAbsolutePath().getParent();
+        if (cacheDir == null) {
+            throw new NullPointerException("cacheDir is null for whatever reason");
+        }
+        try {
+            cacheDir = cacheDir.toRealPath();
+        } catch (IOException e) {
+            cacheDir = cacheDir.toAbsolutePath();
+        }
+        Path localeDir = cacheDir.resolve("locale");
+        Path resourcesFile = cacheDir.resolve("res.data");
+
+        File gameFileDir = Utils.getGameDir(Utils.STEAM_NECESSE_APPNAME);
+        if (gameFileDir == null) {
+            super.getLogger().warn("Cannot find game folder for game '" + Utils.STEAM_NECESSE_APPNAME + "' with appid " + Utils.STEAM_NECESSE_APPID + ".");
+            return;
+        }
+        Path gameFolder = gameFileDir.toPath();
+
+        if (Files.notExists(localeDir)) {
+            Path internalLocaleFolder;
+            if (Files.notExists(internalLocaleFolder = gameFolder.resolve("locale"))) {
+                super.getLogger().warn("Couldn't locate folder 'locale'. You might need to copy the 'locale' folder manually in order to be able to run this task");
+            } else {
+                try {
+                    Files.createSymbolicLink(localeDir, internalLocaleFolder);
+                } catch (IOException e) {
+                    super.getLogger().warn("Cannot link folder 'locale'. You might need to copy the 'locale' folder manually in order to be able to run this task", e);
+                }
+            }
+        }
+        if (Files.notExists(resourcesFile)) {
+            Path internalResourceFile;
+            if (Files.notExists(internalResourceFile = gameFolder.resolve("res.data"))) {
+                super.getLogger().warn("Couldn't locate file 'res.data'. You might need to copy the file 'res.data' manually in order to be able to run this task");
+            } else {
+                try {
+                    Files.createSymbolicLink(resourcesFile, internalResourceFile);
+                } catch (IOException e) {
+                    super.getLogger().warn("Cannot link file 'res.data'. You might need to copy the file 'res.data' manually in order to be able to run this task", e);
+                }
+            }
+        }
+    }
+
     @Override
     public void exec() {
         this.resolveClasspath();
-        this.linkDataFolder();
+        if (this.extension.steamAppId == Utils.STEAM_GALIMULATOR_APPID) {
+            this.linkDataFolder();
+        } else if (this.extension.steamAppId == Utils.STEAM_NECESSE_APPID) {
+            this.linkNecesseFiles();
+        }
         this.setupLauncherProperties();
         super.exec();
     }

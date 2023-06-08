@@ -29,8 +29,10 @@ public final class Utils {
     @Nullable
     private static final MethodHandle READ_ALL_BYTES_HANDLE;
     public static final int STEAM_GALIMULATOR_APPID = 808100;
+    public static final int STEAM_NECESSE_APPID =    1169040;
 
     public static final String STEAM_GALIMULATOR_APPNAME = "Galimulator";
+    public static final String STEAM_NECESSE_APPNAME = "Necesse";
 
     public static final String STEAM_WINDOWS_REGISTRY_INSTALL_DIR_KEY = "InstallPath";
 
@@ -84,7 +86,7 @@ public final class Utils {
         File steamExec = getSteamExecutableDir();
         if (steamExec == null || !steamExec.exists()) {
             if (OPERATING_SYSTEM.toLowerCase(Locale.ROOT).startsWith("win")) {
-                steamExec = getOneOfExistingFiles("C:\\Steam\\", "C:\\Program Files (x86)\\Steam\\", "C:\\Program Files\\Steam\\", "D:\\Steam\\", "C:\\Programmes\\Steam\\", "D:\\Programmes\\Steam\\");
+                steamExec = getOneOfExistingFiles("C:\\Steam\\", "C:\\Program Files (x86)\\Steam\\", "C:\\Program Files\\Steam\\", "D:\\Steam\\", "C:\\Programmes\\Steam\\", "D:\\Programmes\\Steam\\", "D:\\SteamLibrary\\", "E:\\SteamLibrary\\", "F:\\SteamLibrary\\", "C:\\SteamLibrary\\");
             }
             if (steamExec == null) {
                 return null;

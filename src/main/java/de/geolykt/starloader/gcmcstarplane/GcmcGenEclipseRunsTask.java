@@ -32,7 +32,7 @@ public class GcmcGenEclipseRunsTask extends DefaultTask {
 
     private final File runModLaunchFile;
 
-    private GcmcExtension extension = getProject().getExtensions().getByType(GcmcExtension.class);
+    private final GcmcExtension extension = getProject().getExtensions().getByType(GcmcExtension.class);
 
     public GcmcGenEclipseRunsTask() {
         super.dependsOn("deployMods");
@@ -47,6 +47,40 @@ public class GcmcGenEclipseRunsTask extends DefaultTask {
     private static void writeLine(@NotNull BufferedWriter writer, @NotNull String string) throws IOException {
         writer.write(string);
         writer.newLine();
+    }
+
+    private void linkNecesseFiles() {
+        Path cacheDir = GcmcStarplanePlugin.OBF_HANDLERS.get(super.getProject()).getTransformedGalimulatorJar().getParent();
+        if (cacheDir == null) {
+            throw new NullPointerException("cacheDir is null for whatever reason");
+        }
+        Path localeDir = cacheDir.resolve("locale");
+        Path resourcesFile = cacheDir.resolve("res.data");
+        File gameFolder = Utils.getGameDir(Utils.STEAM_NECESSE_APPNAME);
+        if (Files.notExists(localeDir)) {
+            Path internalLocaleFolder;
+            if (gameFolder == null || Files.notExists(internalLocaleFolder = gameFolder.toPath().resolve("data"))) {
+                super.getLogger().warn("Couldn't locate folder 'locale'. You might need to copy the 'locale' folder manually in order to be able to run this task");
+            } else {
+                try {
+                    Files.createSymbolicLink(localeDir, internalLocaleFolder);
+                } catch (IOException e) {
+                    super.getLogger().warn("Cannot link folder 'locale'. You might need to copy the 'locale' folder manually in order to be able to run this task", e);
+                }
+            }
+        }
+        if (Files.notExists(resourcesFile)) {
+            Path internalResourceFile;
+            if (gameFolder == null || Files.notExists(internalResourceFile = gameFolder.toPath().resolve("data"))) {
+                super.getLogger().warn("Couldn't locate file 'res.data'. You might need to copy the file 'res.data' manually in order to be able to run this task");
+            } else {
+                try {
+                    Files.createSymbolicLink(resourcesFile, internalResourceFile);
+                } catch (IOException e) {
+                    super.getLogger().warn("Cannot link file 'res.data'. You might need to copy the file 'res.data' manually in order to be able to run this task", e);
+                }
+            }
+        }
     }
 
     @TaskAction
@@ -90,6 +124,8 @@ public class GcmcGenEclipseRunsTask extends DefaultTask {
                         }
                     }
                 }
+            } else if (this.extension.steamAppId == Utils.STEAM_NECESSE_APPID) {
+                this.linkNecesseFiles();
             }
 
             // Project source sets
