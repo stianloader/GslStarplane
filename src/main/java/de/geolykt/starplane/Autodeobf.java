@@ -1942,7 +1942,7 @@ public class Autodeobf implements StarmappedNames {
      * This method does not need to be run after intermediary.
      */
     public void remapHotkeys(Writer mappingsStream) throws IOException {
-        ClassNode mainClass = name2Node.get(MAIN_ENTRYPOINT_CLASS);
+        ClassNode mainClass = this.name2Node.get(MAIN_ENTRYPOINT_CLASS);
         if (mainClass == null) {
             throw new OutdatedDeobfuscatorException("Hotkey", "Cannot find " + MAIN_ENTRYPOINT_CLASS);
         }
@@ -1963,11 +1963,86 @@ public class Autodeobf implements StarmappedNames {
         if (aShortcutClass == null) {
             throw new OutdatedDeobfuscatorException("Hotkey", MAIN_ENTRYPOINT_CLASS, "setupShortcuts");
         }
-        ClassNode extendsShortcut = name2Node.get(aShortcutClass);
+        ClassNode extendsShortcut = this.name2Node.get(aShortcutClass);
         if (extendsShortcut == null) {
             throw new OutdatedDeobfuscatorException("Hotkey", "Cannot find " + aShortcutClass);
         }
         remapClass(mappingsStream, extendsShortcut.superName, BASE_PACKAGE + "Shortcut");
+
+        String aboutWidgetClass = null;
+        String showShortcutListButtonClass = null;
+
+        for (ClassNode node : this.nodes) {
+            if (node.name.startsWith(UI_PACKAGE)) {
+                for (MethodNode method : node.methods) {
+                    if (!method.name.equals("<init>")) {
+                        continue;
+                    }
+                    boolean flag = false;
+                    for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                        if (insn.getOpcode() != Opcodes.LDC) {
+                            continue;
+                        }
+                        LdcInsnNode ldcInsn = (LdcInsnNode) insn;
+                        if (ldcInsn.cst.equals("about")) {
+                            flag = true;
+                        } else if (flag && ldcInsn.cst.equals("{$1}")) {
+                            aboutWidgetClass = node.name;
+                            while (insn != null) {
+                                if (insn.getOpcode() == Opcodes.LDC && ((LdcInsnNode) insn).cst.equals("Keyboard shortcuts")) {
+                                    break;
+                                }
+                                insn = insn.getNext();
+                            }
+                            TypeInsnNode typeInsn = getPreviousOrNull(insn, Opcodes.NEW);
+                            if (typeInsn == null) {
+                                throw new OutdatedDeobfuscatorException("Hotkey", SHOW_SHORTCUT_LIST_BUTTON_CLASS, "*", insn == null ? "Prerequisite missing" : "No such NEW insn");
+                            }
+                            showShortcutListButtonClass = typeInsn.desc;
+                            break;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                }
+            } else if (node.name.startsWith(MAIN_ENTRYPOINT_CLASS + "$")
+                    && node.superName.equals(extendsShortcut.superName)) {
+                
+            }
+        }
+
+        if (aboutWidgetClass == null) {
+            throw new OutdatedDeobfuscatorException("Hotkey", ABOUT_WIDGET_CLASS, "*", "Unresolved");
+        }
+        if (showShortcutListButtonClass == null) {
+            throw new OutdatedDeobfuscatorException("Hotkey", SHOW_SHORTCUT_LIST_BUTTON_CLASS, "*", "Unresolved");
+        }
+
+        remapClass(mappingsStream, aboutWidgetClass, ABOUT_WIDGET_CLASS);
+        remapClass(mappingsStream, showShortcutListButtonClass, SHOW_SHORTCUT_LIST_BUTTON_CLASS);
+
+        ClassNode showShortcutListButtonNode = this.name2Node.get(showShortcutListButtonClass);
+        this.assignAsInnerClass(this.name2Node.get(aboutWidgetClass), showShortcutListButtonNode, SHOW_SHORTCUT_LIST_BUTTON_CLASS.substring(ABOUT_WIDGET_CLASS.length() + 1));
+
+        MethodNode showShortcutListMethod = null;
+        for (MethodNode method : showShortcutListButtonNode.methods) {
+            if (method.name.codePointAt(0) == '<') {
+                continue;
+            }
+            if (showShortcutListMethod != null) {
+                throw new OutdatedDeobfuscatorException("Hotkey", SHOW_SHORTCUT_LIST_BUTTON_CLASS, "onMouseDown", "Collision");
+            }
+            showShortcutListMethod = method;
+        }
+
+        if (showShortcutListMethod == null) {
+            throw new OutdatedDeobfuscatorException("Hotkey", SHOW_SHORTCUT_LIST_BUTTON_CLASS, "onMouseDown", "Not found");
+        }
+
+        ClassNode shortcutListWidgetClass = this.name2Node.get(((TypeInsnNode) getNext(showShortcutListMethod.instructions.getFirst())).desc);
+
+        remapClass(mappingsStream, shortcutListWidgetClass.name, SHORTCUT_LIST_WIDGET_CLASS);
     }
 
     public void remapMapModes(Writer mappingsOut) throws IOException {
