@@ -6246,7 +6246,9 @@ public class Autodeobf implements StarmappedNames {
             throw new OutdatedDeobfuscatorException("Widget", "Widget", "getCamera", "not resolved");
         }
 
-        String widgetOnMouseDownMethod = null;
+        String widgetInterceptMouseDownMethod = null;
+        String widgetMouseDownMethod = null;
+        String widgetConsiderRelayoutMethod = null;
 
         {
             ClassNode gestureListener = name2Node.get(galimulatorGestureListener);
@@ -6273,14 +6275,32 @@ public class Autodeobf implements StarmappedNames {
                         if (nextInsn.getOpcode() == Opcodes.INVOKEVIRTUAL) {
                             MethodInsnNode insn = (MethodInsnNode) nextInsn;
                             if (insn.desc.equals("(FF)Z") && insn.owner.equals(WIDGET_CLASS)) {
-                                widgetOnMouseDownMethod = insn.name;
+                                widgetInterceptMouseDownMethod = insn.name;
                                 break;
                             }
                         }
                         nextInsn = nextInsn.getNext();
                     }
-                    if (widgetOnMouseDownMethod == null) {
-                        throw new OutdatedDeobfuscatorException("GestureListener", "Widget", "onMouseDown", "Instructions exhausted");
+                    if (widgetInterceptMouseDownMethod == null) {
+                        throw new OutdatedDeobfuscatorException("GestureListener", "Widget", "interceptMouseDown", "Instructions exhausted");
+                    }
+                    while (nextInsn != null) {
+                        if (nextInsn.getOpcode() == Opcodes.INVOKEVIRTUAL) {
+                            MethodInsnNode insn = (MethodInsnNode) nextInsn;
+                            if (insn.desc.equals("(DD)V") && insn.owner.equals(WIDGET_CLASS)) {
+                                widgetMouseDownMethod = insn.name;
+                                insn = getNext(insn, Opcodes.INVOKEVIRTUAL);
+                                if (!insn.owner.equals(WIDGET_CLASS) || !insn.desc.equals("()V")) {
+                                    throw new OutdatedDeobfuscatorException("GestureListener", "Widget", "mouseDown", "Invalid owner or descriptor");
+                                }
+                                widgetConsiderRelayoutMethod = insn.name;
+                                break;
+                            }
+                        }
+                        nextInsn = nextInsn.getNext();
+                    }
+                    if (widgetMouseDownMethod == null) {
+                        throw new OutdatedDeobfuscatorException("GestureListener", "Widget", "mouseDown", "Instructions exhausted");
                     }
                 } else if (method.name.equals("tap") && method.desc.equals("(FFII)Z")) {
                     // TODO slated for removal I guess, but does it have another probable use in the (near) future?
@@ -6304,7 +6324,7 @@ public class Autodeobf implements StarmappedNames {
             }
         }
 
-        if (widgetOnMouseDownMethod == null) {
+        if (widgetInterceptMouseDownMethod == null) {
             throw new OutdatedDeobfuscatorException("GestureListener", "Widget", "onMouseDown");
         }
 
@@ -6332,7 +6352,7 @@ public class Autodeobf implements StarmappedNames {
                     remapMethod(mappingsStream, node.name, widgetAddChildMethod, "addChild", widgetAddChildMethodDescriptor);
                     remapMethod(mappingsStream, node.name, widgetRefreshLayoutMethod, "refreshLayout", "()V");
                     remapMethod(mappingsStream, node.name, widgetDrawChildrenMethod, "drawChildren", "()V");
-                    remapMethod(mappingsStream, node.name, widgetOnMouseDownMethod, "onMouseDown", "(FF)Z");
+                    remapMethod(mappingsStream, node.name, widgetInterceptMouseDownMethod, "interceptMouseDown", "(FF)Z");
                     remapMethod(mappingsStream, node.name, widgetGetChildrenMethod, "getChildWidgets", "()Ljava/util/Vector;");
                     remapMethod(mappingsStream, node.name, widgetGetCameraMethod, "getCamera", "()L" + GDX_CAMERA_CLASS + ";");
                     remapMethod(mappingsStream, node.name, widgetGetPositioningMethod, "getPositioning", "()L" + WIDGET_POSITIONING_CLASS + ";");
@@ -6341,6 +6361,8 @@ public class Autodeobf implements StarmappedNames {
                     remapMethod(mappingsStream, node.name, widgetOnDisposeMethod, "onDispose", "()V");
                     remapMethod(mappingsStream, node.name, widgetIsPersistentMethod, "isPersistent", "()Z");
                     remapMethod(mappingsStream, node.name, widgetHoverMethod, "hover", "(FFZ)V");
+                    remapMethod(mappingsStream, node.name, widgetConsiderRelayoutMethod, "considerRelayout", "()V");
+                    remapMethod(mappingsStream, node.name, widgetMouseDownMethod, "mouseDown", "(DD)V");
                 }
                 remapMethod(mappingsStream, node.name, widgetRecieveMessageMethod, "recieveMessage", "(L" + WIDGET_MESSAGE_CLASS + ";)V");
             } else if (isInstanceofClass(node, widgetLayoutClass)) {

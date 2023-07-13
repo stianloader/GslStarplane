@@ -48,7 +48,7 @@ public interface StarmappedNames {
     public static final String SETTINGS_DIALOG_STRING_CHOOSER_CLASS = SETTINGS_DIALOG_CLASS + "$10003";
     public static final String SHIP_CONSTRUCTION_WIDGET_CLASS = BASE_PACKAGE + "ui/ShipConstructionWidget";
     public static final String SHIP_CONSTRUCTION_WIDGET_LOCATION_SELECTOR_CLASS = SHIP_CONSTRUCTION_WIDGET_CLASS + "$10001";
-    public static final String SHORTCUT_LIST_WIDGET_CLASS = UI_PACKAGE + "ShortcutListWidget";
+    public static final String SHORTCUT_LIST_WIDGET_CLASS = BASE_PACKAGE + "ShortcutListWidget";
     public static final String SHOW_SHORTCUT_LIST_BUTTON_CLASS = ABOUT_WIDGET_CLASS + "$ShowShortcutListButton";
     public static final String SPACE_ACTIVE_WIDGETS_FIELD = "activeWidgets";
     public static final String SPACE_ADD_AUXILIARY_LISTENER = "addAuxiliaryListener";

@@ -263,7 +263,7 @@ may get supported.
 
 ## Decompilation
 
-gslStarplane decompiles Galimulator with Quiltflower, a Fernflower-based
+gslStarplane decompiles Galimulator with Vineflower, a Fernflower-based
 decompiler. The dependencies added on the decompilation classpath are
 controlled by the `galimulatorDependencies`. Furthermore, gslStarplane always
 decompiles the stripped galimulator jar with compile-time access.
@@ -272,17 +272,6 @@ The original line mappings are visible in the decompiled output,
 but starplane automatically changes the line mappings of the runtime and
 the stripped compile-time jars to reflect the line mappings of the decompiled
 output.
-
-**NOTE**: I am aware that QuiltMC (the organisation behind Quiltflower)
-had a serious internal disruption starting from the 20th April of 2023. Due
-to the organisation seemingly not being aware of the importance of good wording
-(please: be aware that words are the most important thing ever if you intend
-to intend to depos someone. Using wording that can only be described as counter-
-productive is stupid), I have been banned on Quilt's toolchain discord. I thus
-deem it likely that I have been completely banned from the entirety of the quilt
-project. The current strategy is to just wait and hope that they forget that I
-am banned. Should that not work, Quiltflower will probably get forked by us (or
-we use a fork from an organisation that suffered a similar fate).
 
 ## Eclipse external null annotations
 
