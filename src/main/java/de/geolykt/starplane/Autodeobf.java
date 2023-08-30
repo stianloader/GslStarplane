@@ -100,10 +100,12 @@ public class Autodeobf implements StarmappedNames {
     private static final String STAR_CLASS = "snoddasmannen/galimulator/Star";
     private static final String STAR_NATIVES_CLASS = "snoddasmannen/galimulator/Native";
     private static final String STATE_ACTOR_CLASS = "snoddasmannen/galimulator/actors/StateActor";
+    private static final String VANITY_HOLDER_CLASS = BASE_PACKAGE + "VanityHolder";
     private static final String WAR_CLASS = BASE_PACKAGE + "War";
     private static final String WIDGET_CLASS = "snoddasmannen/galimulator/ui/Widget";
     private static final String WIDGET_MESSAGE_CLASS = WIDGET_CLASS + "$WIDGET_MESSAGE";
     private static final String WIDGET_POSITIONING_CLASS = WIDGET_CLASS + "$WIDGET_POSITIONING";
+    private static final String WORDLIST_CLASS = BASE_PACKAGE + "WordList";
 
     private static final AbstractInsnNode[] BITMAP_STAR_GENERATOR_GET_RESOURCES_LIST_METHOD_CONTENTS = new AbstractInsnNode[] {
             new FieldInsnNode(Opcodes.GETSTATIC, "com/badlogic/gdx/Gdx", "files", "Lcom/badlogic/gdx/Files;"),
@@ -139,7 +141,7 @@ public class Autodeobf implements StarmappedNames {
     }
 
     public static String getVersion() {
-        return "5.0";
+        return "5.0.1";
     }
 
     private void assignAsAnonymousClass(ClassNode outerClass, ClassNode innerClass, String outerMethod, String outerMethodDesc) {
@@ -1214,6 +1216,71 @@ public class Autodeobf implements StarmappedNames {
                     remapMethod(mappingsStream, EMPIRE_CLASS, methodInsn.name, "isAvoidingAlliances", "()Z");
                 }
             }
+        }
+
+        String mottoGeneratorClass = null;
+
+        nodeloop:
+        for (ClassNode node : nodes) {
+            for (MethodNode method : node.methods) {
+                for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                    if (insn.getOpcode() == Opcodes.LDC && ((LdcInsnNode) insn).cst.equals("data/mottopreps.txt")) {
+                        if (mottoGeneratorClass != null) {
+                            throw new OutdatedDeobfuscatorException("Empire", MOTTO_GENERATOR_CLASS, "*", "Collision");
+                        }
+                        mottoGeneratorClass = node.name;
+                        remapClass(mappingsStream, node.name, MOTTO_GENERATOR_CLASS);
+                        remapMethod(mappingsStream, node.name, method.name, "initialize", method.desc);
+                        FieldInsnNode finsn = getNext(insn, Opcodes.PUTSTATIC);
+                        if (!finsn.owner.equals(node.name) || !finsn.desc.equals("L" + WORDLIST_CLASS + ";")) {
+                            throw new OutdatedDeobfuscatorException("Empire", MOTTO_GENERATOR_CLASS, "prepositions", "Unexpected owner or descriptor");
+                        }
+                        remapField(mappingsStream, node.name, finsn.name, "prepositions", "L" + WORDLIST_CLASS + ";");
+                        finsn = getNext(finsn, Opcodes.PUTSTATIC);
+                        if (!finsn.owner.equals(node.name) || !finsn.desc.equals("L" + WORDLIST_CLASS + ";")) {
+                            throw new OutdatedDeobfuscatorException("Empire", MOTTO_GENERATOR_CLASS, "nouns", "Unexpected owner or descriptor");
+                        }
+                        remapField(mappingsStream, node.name, finsn.name, "nouns", "L" + WORDLIST_CLASS + ";");
+                        if (getNextOrNull(finsn, Opcodes.PUTSTATIC) != null) {
+                            throw new OutdatedDeobfuscatorException("Empire", MOTTO_GENERATOR_CLASS, "nouns", "Unexpected trailing PUTSTATIC call");
+                        }
+                        MethodNode candidate = null;
+                        for (MethodNode method2 : node.methods) {
+                            if (method2.desc.equals("()Ljava/lang/String;")) {
+                                if (candidate != null) {
+                                    throw new OutdatedDeobfuscatorException("Empire", MOTTO_GENERATOR_CLASS, "generateMotto", "Collision");
+                                }
+                                candidate = method2;
+                            }
+                        }
+                        if (candidate == null) {
+                            throw new OutdatedDeobfuscatorException("Empire", MOTTO_GENERATOR_CLASS, "generateMotto", "Not found");
+                        }
+                        remapMethod(mappingsStream, node.name, candidate.name, "generateMotto", "()Ljava/lang/String;");
+                        insn = candidate.instructions.getFirst();
+                        MethodInsnNode minsn = getNext(insn, Opcodes.INVOKEVIRTUAL);
+                        if (!minsn.owner.equals(VANITY_HOLDER_CLASS) || !minsn.desc.equals("()Z")) {
+                            throw new OutdatedDeobfuscatorException("Empire", VANITY_HOLDER_CLASS, "hasMotto", "Unexpected owner or descriptor");
+                        }
+                        remapMethod(mappingsStream, VANITY_HOLDER_CLASS, minsn.name, "hasMotto", "()Z");
+                        minsn = getNext(minsn, Opcodes.INVOKEVIRTUAL);
+                        if (!minsn.owner.equals(VANITY_HOLDER_CLASS) || !minsn.desc.equals("()Ljava/lang/String;")) {
+                            throw new OutdatedDeobfuscatorException("Empire", VANITY_HOLDER_CLASS, "getMotto", "Unexpected owner or descriptor");
+                        }
+                        remapMethod(mappingsStream, VANITY_HOLDER_CLASS, minsn.name, "getMotto", "()Ljava/lang/String;");
+                        minsn = getNext(minsn, Opcodes.INVOKEVIRTUAL);
+                        if (!minsn.owner.equals(WORDLIST_CLASS) || !minsn.desc.equals("()Ljava/lang/String;")) {
+                            throw new OutdatedDeobfuscatorException("Empire", WORDLIST_CLASS, "getRandomWord", "Unexpected owner or descriptor");
+                        }
+                        remapMethod(mappingsStream, WORDLIST_CLASS, minsn.name, "getRandomWord", "()Ljava/lang/String;");
+                        continue nodeloop;
+                    }
+                }
+            }
+        }
+
+        if (mottoGeneratorClass == null) {
+            throw new OutdatedDeobfuscatorException("Empire", MOTTO_GENERATOR_CLASS, "*", "Not found");
         }
     }
 

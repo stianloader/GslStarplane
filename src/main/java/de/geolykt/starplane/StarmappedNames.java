@@ -35,6 +35,7 @@ public interface StarmappedNames {
     public static final String LABELED_CHECKBOX_COMPONENT = DIALOG_PACKAGE + "LabeledCheckboxComponent";
     public static final String LABELED_STRING_CHOOSER_COMPONENT = DIALOG_PACKAGE + "LabeledStringChooserComponent";
     public static final String LANDMARK_MANAGER_CLASS = GUIDES_PACKAGE + "LandmarkManager";
+    public static final String MOTTO_GENERATOR_CLASS = BASE_PACKAGE + "MottoGenerator";
     public static final String NINEPATCH_BUTTON = BASE_PACKAGE + "ui/NinepatchButtonWidget";
     public static final String ODDITY_BULLETIN_CLASS = BASE_PACKAGE + "OddityBulletin";
     public static final String PAGINATED_WIDGET_CLASS = UI_PACKAGE + "PaginatedWidget";
