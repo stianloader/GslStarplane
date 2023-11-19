@@ -3432,7 +3432,7 @@ public class Autodeobf implements StarmappedNames {
                     }
                     getLazyMethodName = methodInsn.name;
                     getLazyMethodDesc = methodInsn.desc;
-                    remapClass(mappingsStream, getLazyMethodDesc.substring(3, getLazyMethodDesc.length() - 1), BASE_PACKAGE + "Identifable");
+                    remapClass(mappingsStream, getLazyMethodDesc.substring(3, getLazyMethodDesc.length() - 1), BASE_PACKAGE + "Identifiable");
                     getOrCreateWarMethod = method.name;
                 }
             }
