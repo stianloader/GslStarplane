@@ -143,25 +143,44 @@ public class ObfuscationHandler {
 
         // Now, somehow obtain the galim jar
         File cleanGalimJar = new File(this.projectDir.toFile(), "galimulator-desktop.jar");
+
+        found:
         if (!cleanGalimJar.exists()) {
             LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
             cleanGalimJar = new File(this.cacheDir.toFile(), "galimulator-desktop.jar");
-            if (!cleanGalimJar.exists()) {
-                LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
-                // obtain galimulator jar
-                File galimDir = Utils.getGameDir("Galimulator");
-                if (galimDir == null || !galimDir.exists()) {
-                    LOGGER.error("Unable to resolve galimulator directory!");
-                    throw new IllegalStateException("Cannot resolve dependencies");
-                }
-                cleanGalimJar = new File(galimDir, "jar/galimulator-desktop.jar");
-                if (!cleanGalimJar.exists()) {
-                    LOGGER.error(
-                            "Unable to resolve galimulator jar file (was able to resolve the potential directory though)!");
-                    throw new IllegalStateException("Cannot resolve dependencies");
-                }
+            if (cleanGalimJar.exists()) {
+                break found;
             }
+
+            LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
+            String propertyPath = System.getProperty("de.geolykt.starplane.galimulator-jar");
+
+            if (propertyPath != null) {
+                cleanGalimJar = this.projectDir.resolve(propertyPath).toFile();
+                if (cleanGalimJar.exists()) {
+                    break found;
+                }
+                LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
+            } else {
+                LOGGER.info("System property 'de.geolykt.starplane.galimulator-jar' not defined.");
+            }
+
+            // obtain galimulator jar
+            File galimDir = Utils.getGameDir("Galimulator");
+
+            if (galimDir != null && galimDir.exists()) {
+                cleanGalimJar = new File(galimDir, "jar/galimulator-desktop.jar");
+                if (cleanGalimJar.exists()) {
+                    break found;
+                }
+                LOGGER.error("Unable to resolve galimulator jar file (was able to resolve the potential directory though)!");
+            } else {
+                LOGGER.error("Unable to resolve galimulator directory!");
+            }
+
+            throw new IllegalStateException("Cannot resolve dependencies");
         }
+
         LOGGER.info("Using the base galimulator jar found at " + cleanGalimJar.getAbsolutePath());
 
         Path map = this.cacheDir.resolve(INTERMEDIARY_FILE_NAME);
