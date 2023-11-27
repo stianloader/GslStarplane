@@ -18,28 +18,32 @@ repositories {
         name 'fabric'
         url 'https://maven.fabricmc.net/'
     }
+    maven {
+        name 'stianloader-maven'
+        url 'https://stianloader.org/maven/'
+    }
     mavenCentral()
 }
 
 dependencies {
-    implementation "de.geolykt.starloader:sl-deobf:0.1.1"
+    implementation "de.geolykt.starloader:sl-deobf:0.1.1-a20231127"
     implementation "de.geolykt.starloader:reversible-access-setter:1.0.0"
     implementation gradleApi()
-    implementation "org.ow2.asm:asm:9.5"
-    implementation "org.ow2.asm:asm-tree:9.5"
-    implementation "org.ow2.asm:asm-util:9.5"
-    implementation "org.ow2.asm:asm-commons:9.5"
+    implementation "org.ow2.asm:asm:9.6"
+    implementation "org.ow2.asm:asm-tree:9.6"
+    implementation "org.ow2.asm:asm-util:9.6"
+    implementation "org.ow2.asm:asm-commons:9.6"
 
     // https://mvnrepository.com/artifact/org.json/json
-    implementation 'org.json:json:20230618'
+    implementation 'org.json:json:20231013'
 
     // https://mvnrepository.com/artifact/net.fabricmc/tiny-remapper
-    implementation 'net.fabricmc:tiny-remapper:0.8.7'
+    implementation 'net.fabricmc:tiny-remapper:0.8.10'
     // https://mvnrepository.com/artifact/org.vineflower/vineflower
-    implementation 'org.vineflower:vineflower:1.9.1'
+    implementation 'org.vineflower:vineflower:1.9.3'
 
     // https://mvnrepository.com/artifact/org.jetbrains/annotations
-    compileOnly group: 'org.jetbrains', name: 'annotations', version: '24.0.1'
+    compileOnly group: 'org.jetbrains', name: 'annotations', version: '24.1.0'
 }
 
 gradlePlugin {
@@ -78,9 +82,13 @@ publishing {
         }
     }
     repositories {
-        mavenLocal()
-        /*maven {
-            url = "/home/Geolykt/maven-alt/repo/"
-        }*/
+        if (System.getProperty('publishRepo') != null) {
+            maven {
+                url System.getProperty('publishRepo')
+                allowInsecureProtocol = true
+            }
+        } else {
+            mavenLocal()
+        }
     }
 }

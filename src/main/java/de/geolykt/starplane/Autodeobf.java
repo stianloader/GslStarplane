@@ -141,7 +141,7 @@ public class Autodeobf implements StarmappedNames {
     }
 
     public static String getVersion() {
-        return "5.0.1";
+        return "5.0.2";
     }
 
     private void assignAsAnonymousClass(ClassNode outerClass, ClassNode innerClass, String outerMethod, String outerMethodDesc) {
