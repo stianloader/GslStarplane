@@ -8,15 +8,15 @@ import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.WeakHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -38,19 +38,19 @@ import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger.Severity;
 import org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences;
 import org.json.JSONArray;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.Label;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InnerClassNode;
-import org.objectweb.asm.tree.LineNumberNode;
-import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.LoggerFactory;
 
 import de.geolykt.starplane.Autodeobf;
 import de.geolykt.starplane.JarStripper;
 import de.geolykt.starplane.JarStripper.MavenId;
 import de.geolykt.starplane.ObfuscationHandler;
-import de.geolykt.starplane.Utils;
 import de.geolykt.starplane.sourcegen.EnhancedJarSaver;
 import de.geolykt.starplane.sourcegen.FernflowerLoggerAdapter;
 
@@ -204,7 +204,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
             }
         }
 
-        if (obfHandler.didRefresh || Files.notExists(compileStrippedSource)) {
+        if (obfHandler.didRefresh || Files.notExists(compileStrippedSource) && !Boolean.getBoolean("org.stianloader.starplane.skipDecompile")) {
             try {
                 decompile(project, runtimeLarge, compileStripped, compileStrippedSource, transitiveDeps);
             } catch (IOException e) {
@@ -257,35 +257,34 @@ public class GslStarplanePlugin implements Plugin<Project> {
     }
 
     private static void replaceLineNumbers(@NotNull Path lineReplaceTarget, Map<String, int[]> lineMappings) throws IOException {
-        Map<ZipEntry, byte[]> resources = new LinkedHashMap<>();
-        Map<String, ClassNode> nameToNode = new HashMap<>();
-        Map<String, ClassReader> readers = new HashMap<>();
-        SortedSet<ClassNode> nodesSorted = new TreeSet<>((n1, n2) -> n1.name.compareTo(n2.name));
+        Map<String, ClassNode> nameToNode = new LinkedHashMap<>();
 
-        try (ZipInputStream zipIn = new ZipInputStream(Files.newInputStream(lineReplaceTarget))) {
+        try (ZipInputStream zipIn = new ZipInputStream(Files.newInputStream(lineReplaceTarget), StandardCharsets.UTF_8)) {
             for (ZipEntry entry = zipIn.getNextEntry(); entry != null; entry = zipIn.getNextEntry()) {
-                if (!entry.getName().endsWith(".class")) {
-                    resources.put(entry, Utils.readAllBytes(zipIn));
-                    continue;
+                if (entry.getName().endsWith(".class")) {
+                    ClassNode node = new ClassNode();
+                    ClassReader reader = new ClassReader(zipIn);
+                    reader.accept(node, ClassReader.SKIP_CODE ^ ClassReader.SKIP_FRAMES);
+                    nameToNode.put(node.name, node);
                 }
-                ClassNode node = new ClassNode();
-                ClassReader reader = new ClassReader(zipIn);
-                reader.accept(node, 0);
-                readers.put(node.name, reader);
-                nameToNode.put(node.name, node);
-                nodesSorted.add(node);
             }
         }
 
-        try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(lineReplaceTarget), StandardCharsets.UTF_8)) {
-            for (Map.Entry<ZipEntry, byte[]> resource : resources.entrySet()) {
-                zipOut.putNextEntry(resource.getKey());
-                zipOut.write(resource.getValue());
-            }
-            resources = null; // Free up memory
+        Path intermediary = Files.createTempFile("gcmcstarplane-linereplane-" + ThreadLocalRandom.current().nextInt(), ".jar");
+        try (ZipInputStream zipIn = new ZipInputStream(Files.newInputStream(lineReplaceTarget), StandardCharsets.UTF_8);
+                ZipOutputStream zipOutputStream = new ZipOutputStream(Files.newOutputStream(intermediary), StandardCharsets.UTF_8)) {
+            for (ZipEntry entry = zipIn.getNextEntry(); entry != null; entry = zipIn.getNextEntry()) {
+                zipOutputStream.putNextEntry(new ZipEntry(entry.getName()));
+                if (!entry.getName().endsWith(".class")) {
+                    byte[] buffer = new byte[4096];
+                    for (int read = zipIn.read(buffer); read != -1; read = zipIn.read(buffer)) {
+                        zipOutputStream.write(buffer, 0, read);
+                    }
+                    continue;
+                }
+                ClassReader reader = new ClassReader(zipIn);
 
-            for (ClassNode node : nodesSorted) {
-
+                ClassNode node = nameToNode.get(reader.getClassName());
                 ClassNode outermostClassnode = node;
                 outermostNodeFinderLoop:
                 while (true) {
@@ -302,7 +301,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
                     break;
                 }
 
-                if (node.sourceFile.equals("SourceFile")) {
+                if (node.sourceFile == null || node.sourceFile.equals("SourceFile")) {
                     int startName = outermostClassnode.name.lastIndexOf('/') + 1;
                     int innerSeperator = outermostClassnode.name.indexOf('$');
                     String baseName;
@@ -316,34 +315,48 @@ public class GslStarplanePlugin implements Plugin<Project> {
 
                 // mapping[i * 2] -> original line number; mapping[i * 2 + 1] -> new line number
                 int[] mapping = lineMappings.get(outermostClassnode.name);
+                Map<Integer, Integer> lineNumberConversion;
 
-                if (mapping != null) {
-                    Map<Integer, Integer> lineNumberConversion = new HashMap<>();
+                if (mapping == null) {
+                    lineNumberConversion = null;
+                } else {
+                    lineNumberConversion = new HashMap<>();
                     for (int i = 0; i < mapping.length;) {
                         lineNumberConversion.put(mapping[i++], mapping[i++]);
                     }
-                    for (MethodNode method : node.methods) {
-                        if (method.instructions == null) {
-                            continue;
-                        }
-                        for (AbstractInsnNode insn : method.instructions) {
-                            if (insn instanceof LineNumberNode) {
-                                int old = ((LineNumberNode)insn).line;
-                                Integer newLineNumber = lineNumberConversion.get(old);
-                                if (newLineNumber != null) {
-                                    ((LineNumberNode)insn).line = newLineNumber;
-                                }
-                            }
-                        }
-                    }
                 }
 
-                ClassReader reader = readers.get(node.name);
                 ClassWriter writer = new ClassWriter(reader, 0);
-                node.accept(writer);
-                zipOut.putNextEntry(new ZipEntry(node.name + ".class"));
-                zipOut.write(writer.toByteArray());
+                reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String name, String descriptor, String signature,
+                            String[] exceptions) {
+                        return new MethodVisitor(this.api, super.visitMethod(access, name, descriptor, signature, exceptions)) {
+                            @Override
+                            public void visitLineNumber(int line, Label start) {
+                                if (lineNumberConversion == null) {
+                                    super.visitLineNumber(line, start);
+                                } else {
+                                    Integer newLineNumber = lineNumberConversion.get(line);
+                                    if (newLineNumber == null) {
+                                        super.visitLineNumber(line, start);
+                                    } else {
+                                        super.visitLineNumber(newLineNumber.intValue(), start);
+                                    }
+                                }
+                            }
+                        };
+                    }
+
+                    @Override
+                    public void visitSource(String source, String debug) {
+                        super.visitSource(node.sourceFile, debug);
+                    }
+                }, 0);
+                zipOutputStream.write(writer.toByteArray());
             }
         }
+        Files.move(intermediary, lineReplaceTarget, StandardCopyOption.REPLACE_EXISTING);
+        nameToNode.clear();
     }
 }
