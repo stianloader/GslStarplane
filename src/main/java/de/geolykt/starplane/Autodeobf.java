@@ -78,7 +78,6 @@ public class Autodeobf implements StarmappedNames {
     private static final String GDX_INPUT_CLASS = "com/badlogic/gdx/Input";
     private static final String GDX_INPUT_PROCESSOR_CLASS = "com/badlogic/gdx/InputProcessor";
     private static final String GDX_POLYGON_SPRITE = "com/badlogic/gdx/graphics/g2d/PolygonSprite";
-    private static final String GDX_RECTANGLE_CLASS = "com/badlogic/gdx/math/Rectangle";
     private static final String ITEM_CLASS = BASE_PACKAGE + "Item";
     private static final String JOB_CLASS = BASE_PACKAGE + "Job";
     private static final String LOCATION_SELECTED_EFFECT_CLASS = BASE_PACKAGE + "effects/LocationSelectedEffect";

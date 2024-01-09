@@ -24,7 +24,6 @@ import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.component.SoftwareComponent;
 import org.gradle.api.internal.ConventionTask;
 import org.gradle.api.internal.component.UsageContext;
-import org.gradle.api.plugins.internal.DefaultAdhocSoftwareComponent;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.TaskAction;
@@ -65,10 +64,7 @@ public class GslDeployModsTask extends ConventionTask {
         Set<@NotNull Path> out = new LinkedHashSet<>();
         for (Object modJar : this.modJars) {
             if (modJar instanceof SoftwareComponent) {
-                if (!(modJar instanceof DefaultAdhocSoftwareComponent)) {
-                    throw new IllegalStateException("Only implementations of SoftwareComponent that are an instance of DefaultAdhocSoftwareComponent can be used as a mod jar.");
-                }
-                for (UsageContext usageCtx : ((DefaultAdhocSoftwareComponent) modJar).getUsages()) {
+                for (UsageContext usageCtx : GradleInteropUtil.getUsageContexts((SoftwareComponent) modJar)) {
                     if (usageCtx == null) {
                         continue; // Better safe than sorry
                     }
@@ -102,7 +98,7 @@ public class GslDeployModsTask extends ConventionTask {
                     continue;
                 }
                 JSONObject extension = new JSONObject(new String(Utils.readAllBytes(zipIn), StandardCharsets.UTF_8));
-                return Optional.of(extension.getString("name"));
+                return Optional.ofNullable(extension.getString("name"));
             }
         }
         return Optional.empty();

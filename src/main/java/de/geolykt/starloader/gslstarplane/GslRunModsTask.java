@@ -15,7 +15,6 @@ import org.gradle.api.UncheckedIOException;
 import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.component.SoftwareComponent;
 import org.gradle.api.internal.component.UsageContext;
-import org.gradle.api.plugins.internal.DefaultAdhocSoftwareComponent;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.jvm.tasks.Jar;
 import org.gradle.work.DisableCachingByDefault;
@@ -58,10 +57,7 @@ public class GslRunModsTask extends JavaExec {
         for (Object modJar : this.extraMods) {
             getLogger().info("Looking at " + modJar);
             if (modJar instanceof SoftwareComponent) {
-                if (!(modJar instanceof DefaultAdhocSoftwareComponent)) {
-                    throw new IllegalStateException("Only implementations of SoftwareComponent that are an instance of DefaultAdhocSoftwareComponent can be used as a mod jar.");
-                }
-                for (UsageContext usageCtx : ((DefaultAdhocSoftwareComponent) modJar).getUsages()) {
+                for (UsageContext usageCtx : GradleInteropUtil.getUsageContexts((SoftwareComponent) modJar)) {
                     if (usageCtx == null) {
                         continue; // Better safe than sorry
                     }
