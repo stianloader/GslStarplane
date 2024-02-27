@@ -12,7 +12,7 @@ pushes deobfuscated jars which have a copyright on them to it.
 
 GslStarplane functions as a gradle plugin, so it first needs to be applied on a
 gradle project in order to work. Under groovy you can do it by adding
-`id 'gsl-starplane' version '0.1.0'` to the plugins block in the `build.gradle`
+`id 'gsl-starplane' version '0.1.0-a20240227'` to the plugins block in the `build.gradle`
 file. The full plugins block will thus look something like follows:
 
 ```groovy
@@ -20,7 +20,9 @@ plugins {
     id 'java'
     id 'java-library'
     id 'maven-publish'
-    id 'gsl-starplane' version '0.1.0'
+    // Note: When debugging self-compiled versions of gsl-starplane you should leave out
+    // the automatically generated "-aYYYYMMDD" tag.
+    id 'gsl-starplane' version '0.1.0-a20240227'
 }
 ```
 
@@ -36,8 +38,8 @@ pluginManagement {
 //      mavenLocal()   // Uncomment this line if you wish to debug the plugin
         mavenCentral()
         maven {
-            name = 'Geolykt'
-            url = 'https://geolykt.de/maven/'
+            name = 'stianloader-maven'
+            url = 'https://stianloader.org/maven/'
         }
         maven {
             name 'fabric'
@@ -55,6 +57,10 @@ with such a setup. So continue reading!
 **WARNING:** Reversible access setters are as dangerous as they are simple to
 use. Changing access of a method could make methods that normally would be
 independent of each other to override each other.
+
+Usage of AWs as an alternative is not recommended when making use of the
+starloader/stianloader toolchain. Access Wideners do make sense outside of
+our own little island though.
 
 Reversible access setters can optionally be declared in the `build.gradle`
 as follows:
@@ -221,12 +227,41 @@ debugging difficult. To counteract this, the `genEclipseRuns` task generates
 the `runMods.launch` file that can be used to execute the development
 environment right within your IDE with all the extras your IDE provides.
 
-**NOTE:** In most cases the generated \*.launch files won't work as necessary
-tasks (such as negating AWs) aren't run.
-To remedy this issue, improvements need to be done on the Starloader-launcher.
-Such improvements would also mean the end of whacky workarounds such as
-gslStarplane generating runtime-access and compile-time access jars.
-With negated AWs only one slim compile-time access jar would be needed.
+**NOTE:** In legacy applications which still use access wideners the generated
+\*.launch files won't work as necessary tasks (such as negating AWs) aren't run.
+To counteract this issue, mods should instead of RAS (reversible access setters),
+which can be reversed at runtime if deemed necessary. While AWs are still supported
+by SLL, gslStarplane no longer supports remapping them - RAS is still supported
+and will continue to be supported for the forseeable future.
+
+### Dealing with shaded dependencies
+
+When dealing with dependencies that are normally included in the jar of your mod,
+you will generally be quick to see that using these dependencies within your IDE's
+launch configurations will not work due to classloader constraints not be matched.
+This is an unfortunate byproduct of how the IDE evaluates the run configurations
+and the root problem cannot be fixed by us. However, we can tell SLL to bundle
+arbitrary files into your mod at runtime.
+
+What these arbitrary files are is evaluated by the `genEclipseRuns` task
+and can be set by the buildscript using the
+`additionalRuntimeDependency(String, Object)` method.
+
+As gslStarplane will treat each source set as a seperate mod, the individual mods
+of your project are identified using the source set's name. This will generally be
+`main`. The most common use of this feature will as such look as follows:
+
+```groovy
+genEclipseRuns {
+    additionalRuntimeDependency("main", configurations["runtimeClasspath"])
+}
+```
+
+The value is a path element which is one of the following:
+ - A `Configuration`
+ - A `File`, `URI`, `URL` or a `CharSequence` which represents a valid `URL`
+ - All other types that can be converted to `File`
+   as per [Project#file](https://docs.gradle.org/8.1/javadoc/org/gradle/api/Project.html#file-java.lang.Object-).
 
 ## Selecting the Mod loader (the `devRuntime` configuration)
 
@@ -313,9 +348,9 @@ eclipse {
 
 ## Roadmap
 
-Currently it is planned to offer Starplane as Eclipse and IntelliJ plugins,
-however due to the required effort needed to learn their plugin APIs this
-will only happen in the far future - if ever.
+Currently it is planned (or rather said, dreamed of) to offer Starplane as
+Eclipse and IntelliJ plugins, however due to the required effort needed to
+learn their plugin APIs this will only happen in the far future - if ever.
 
 A Maven integration is unlikely due to it apparently lacking the ability
-to add dependencies programatically without touching the POM.
+to add dependencies programmatically without touching the POM.

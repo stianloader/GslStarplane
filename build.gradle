@@ -9,7 +9,7 @@ group = 'de.geolykt.starloader'
 archivesBaseName = 'gsl-starplane'
 def baseVersion = '0.1.0'
 
-targetCompatibility = compileJava.targetCompatibility = '11' // QF is Java 11+ - so we have little other choices for the time being
+targetCompatibility = compileJava.targetCompatibility = '11' // VF is Java 11+ - so we have little other choices for the time being
 sourceCompatibility = compileJava.sourceCompatibility = '1.8' // Just in case we need to go back to Java 8 in the future
 
 repositories {
@@ -35,10 +35,10 @@ dependencies {
     implementation "org.ow2.asm:asm-commons:9.6"
 
     // https://mvnrepository.com/artifact/org.json/json
-    implementation 'org.json:json:20231013'
+    implementation 'org.json:json:20240205'
 
     // https://mvnrepository.com/artifact/net.fabricmc/tiny-remapper
-    implementation 'net.fabricmc:tiny-remapper:0.8.11'
+    implementation 'net.fabricmc:tiny-remapper:0.10.1'
     // https://mvnrepository.com/artifact/org.vineflower/vineflower
     implementation 'org.vineflower:vineflower:1.9.3'
 

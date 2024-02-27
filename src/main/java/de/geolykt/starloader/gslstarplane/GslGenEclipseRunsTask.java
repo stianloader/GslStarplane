@@ -6,15 +6,21 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.gradle.api.DefaultTask;
+import org.gradle.api.Task;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.OutputFile;
@@ -30,21 +36,42 @@ import de.geolykt.starplane.XmlWriter;
 @CacheableTask
 public class GslGenEclipseRunsTask extends DefaultTask {
 
+    private static void writeLine(@NotNull BufferedWriter writer, @NotNull String string) throws IOException {
+        writer.write(string);
+        writer.newLine();
+    }
+
+    private final Map<String, List<Object>> additionalRuntimeDependencies;
     private final File runModLaunchFile;
 
     public GslGenEclipseRunsTask() {
         super.dependsOn("deployMods");
         this.runModLaunchFile = super.getProject().file("runMods.launch");
+        this.additionalRuntimeDependencies = new HashMap<>();
     }
 
-    @OutputFile // Required in order for caching to work
-    public File getRunModLaunchFile() {
-        return this.runModLaunchFile;
+    public void addAdditionalRuntimeDependency(String sourceSet, Object dep) {
+        List<Object> dependencyPaths = this.additionalRuntimeDependencies.get(dep);
+        if (dependencyPaths == null) {
+            dependencyPaths = new ArrayList<>();
+            this.additionalRuntimeDependencies.put(sourceSet, dependencyPaths);
+        }
+        if (dep instanceof Task) {
+            this.dependsOn(dep);
+        }
+        dependencyPaths.add(dep);
     }
 
-    private static void writeLine(@NotNull BufferedWriter writer, @NotNull String string) throws IOException {
-        writer.write(string);
-        writer.newLine();
+    public void additionalRuntimeDependency(String sourceSet, Object dep) {
+        this.addAdditionalRuntimeDependency(sourceSet, dep);
+    }
+
+    public void clearAdditionalRuntimeDependencies() {
+        this.additionalRuntimeDependencies.clear();
+    }
+
+    public void clearAdditionalRuntimeDependencies(String sourceSet) {
+        this.additionalRuntimeDependencies.remove(sourceSet);
     }
 
     @TaskAction
@@ -120,7 +147,54 @@ public class GslGenEclipseRunsTask extends DefaultTask {
             } catch (MalformedURLException e) {
                 throw new UncheckedIOException(e);
             }
+            List<Object> additionalDeps = this.additionalRuntimeDependencies.get(sourceSet.getName());
+            if (additionalDeps != null) {
+                for (Object path : additionalDeps) {
+                    if (path instanceof Configuration) {
+                        for (File resolved : ((Configuration) path).getFiles()) {
+                            try {
+                                urls.put(resolved.toURI().toURL().toExternalForm());
+                            } catch (MalformedURLException e) {
+                                throw new UncheckedIOException("Invalid URL for file " + resolved + " from path dependency " + path, e);
+                            }
+                        }
+                        continue;
+                    }
+
+                    if (path instanceof File) {
+                        path = ((File) path).toURI();
+                    }
+
+                    if (path instanceof URI) {
+                        try {
+                            path = ((URI) path).toURL();
+                        } catch (MalformedURLException ignore) {
+                        }
+                    } else if (path instanceof CharSequence) {
+                        try {
+                            path = new URL(path.toString());
+                        } catch (MalformedURLException ignore) {
+                        }
+                    }
+
+                    if (path instanceof URL) {
+                        urls.put(((URL) path).toExternalForm());
+                        continue;
+                    }
+
+                    try {
+                        urls.put(this.getProject().file(path).toURI().toURL().toExternalForm());
+                    } catch (MalformedURLException e) {
+                        throw new UncheckedIOException("Invalid URL from path dependency " + path, e);
+                    }
+                }
+            }
         }
         return new JSONArray().put(urls);
+    }
+
+    @OutputFile // Required in order for caching to work
+    public File getRunModLaunchFile() {
+        return this.runModLaunchFile;
     }
 }
