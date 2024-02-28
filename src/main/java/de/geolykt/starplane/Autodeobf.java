@@ -5653,6 +5653,7 @@ public class Autodeobf implements StarmappedNames {
 
         String widgetClearChildrenMethod = null;
         String widgetAddChildMethod = null;
+        String widgetDrawDefaultBackgroundMethod = null;
         final String widgetAddChildMethodDescriptor = "(L" + WIDGET_CLASS + ";)L" + WIDGET_CLASS + ";";
         String starGeneratorInterface = null;
         String fxDrawNinepatchMethod = null;
@@ -5660,6 +5661,8 @@ public class Autodeobf implements StarmappedNames {
         String fxDrawTextMethod2 = null;
         String fxRendercacheThreadlocal = null;
         int fxAltDrawTexturesRemapCount = 0;
+        String fxDrawRectMethod = null;
+        ClassNode widgetClass = this.name2Node.get(WIDGET_CLASS);
 
         { // Let's not pollute the method with even more local variables
             AbstractInsnNode first = sidebarInitializeMethod.instructions.getFirst();
@@ -5704,7 +5707,105 @@ public class Autodeobf implements StarmappedNames {
                     if (!starGeneratorInterface.startsWith(BASE_PACKAGE)) {
                         throw new AssertionError("Programmer error:" + starGeneratorInterface);
                     }
-                } else if (method.name.equals(widgetRefreshLayoutMethod)) {
+                    String generatorField = null;
+                    String previewLocationsField = null;
+                    for (FieldNode field : galaxyPreview.fields) {
+                        if (field.desc.equals('L' + starGeneratorInterface + ';')) {
+                            if (generatorField != null) {
+                                throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "generator", "Collision");
+                            }
+                            generatorField = field.name;
+                        } else if (field.desc.equals("Ljava/util/ArrayList;")) {
+                            if (previewLocationsField != null) {
+                                throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "previewLocations", "Collision");
+                            }
+                            previewLocationsField = field.name;
+                        }
+                    }
+
+                    if (generatorField == null) {
+                        throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "generator", "Not present");
+                    }
+                    if (previewLocationsField == null) {
+                        throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "previewLocations", "Not present");
+                    }
+
+                    remapField(mappingsStream, galaxyPreviewClass, generatorField, "generator", 'L' + starGeneratorInterface + ';');
+                    remapField(mappingsStream, galaxyPreviewClass, previewLocationsField, "previewLocations", "Ljava/util/ArrayList;");
+
+                    String allowPreviewMethod = null;
+                    String setPreviewGeneratorMethod = null;
+                    for (MethodNode method2 : galaxyPreview.methods) {
+                        if (method2.name.equals(widgetRefreshLayoutMethod) && method2.desc.equals("()V")) {
+                            for (AbstractInsnNode insn = method2.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                                if (insn.getOpcode() != Opcodes.GETFIELD) {
+                                    continue;
+                                }
+                                FieldInsnNode fInsn = (FieldInsnNode) insn;
+                                if (!fInsn.name.equals(generatorField) || !fInsn.desc.equals('L' + starGeneratorInterface + ';')) {
+                                    continue;
+                                }
+                                if (allowPreviewMethod != null) {
+                                    throw new OutdatedDeobfuscatorException("Widget", STAR_GENERATOR_INTERFACE, "allowPreview", "Collision");
+                                }
+                                fInsn = getNext(fInsn, Opcodes.GETFIELD);
+                                if (!fInsn.name.equals(generatorField) || !fInsn.desc.equals('L' + starGeneratorInterface + ';')) {
+                                    throw new OutdatedDeobfuscatorException("Widget", STAR_GENERATOR_INTERFACE, "allowPreview", "Expected preceeding null check potentially missing");
+                                }
+                                AbstractInsnNode nextInsn = getNext(fInsn);
+                                if (nextInsn.getOpcode() != Opcodes.INVOKEINTERFACE) {
+                                    throw new OutdatedDeobfuscatorException("Widget", STAR_GENERATOR_INTERFACE, "allowPreview", "Unexpected opcode; type " + nextInsn.getClass());
+                                }
+                                MethodInsnNode methodInsn = (MethodInsnNode) nextInsn;
+                                if (!methodInsn.owner.equals(starGeneratorInterface) || !methodInsn.desc.equals("()Z")) {
+                                    throw new OutdatedDeobfuscatorException("Widget", STAR_GENERATOR_INTERFACE, "allowPreview", "Unexpected owner or descriptor");
+                                }
+                                allowPreviewMethod = methodInsn.name;
+                                break;
+                            }
+                        } else if (method2.desc.equals("(L" + starGeneratorInterface + ";)V") && !method2.name.equals("<init>")) {
+                            LdcInsnNode ldcInsn = getNextOrNull(method2.instructions.getFirst(), Opcodes.LDC);
+                            while (ldcInsn != null && !ldcInsn.cst.equals("Setting generator to: ")) {
+                                ldcInsn = getNextOrNull(ldcInsn, Opcodes.LDC);
+                            }
+                            if (ldcInsn == null) {
+                                continue;
+                            }
+                            if (setPreviewGeneratorMethod != null) {
+                                throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "setGenerator", "Collision");
+                            }
+                            setPreviewGeneratorMethod = method2.name;
+                            MethodInsnNode mInsn = getNextOrNull(ldcInsn, Opcodes.INVOKEVIRTUAL);
+                            while (mInsn != null && (mInsn.owner.equals("java/lang/StringBuilder") || mInsn.owner.equals("java/io/PrintStream"))) {
+                                mInsn = getNextOrNull(mInsn, Opcodes.INVOKEVIRTUAL);
+                            }
+                            if (mInsn == null) {
+                                throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "reconfigureGenerator", "Instructions exhausted");
+                            }
+                            if (!mInsn.owner.equals(galaxyPreviewClass)) {
+                                throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "reconfigureGenerator", "Unexpected owner: " + mInsn.owner + "." + mInsn.name + mInsn.desc);
+                            }
+                            if (!mInsn.desc.equals("()V")) {
+                                throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "reconfigureGenerator", "Unexpected descriptor: " + mInsn.owner + "." + mInsn.name + mInsn.desc);
+                            }
+                            remapMethod(mappingsStream, galaxyPreviewClass, mInsn.name, "reconfigureGenerator", "()V");
+                            while ((mInsn = getNextOrNull(mInsn, Opcodes.INVOKEVIRTUAL)) != null) {
+                                if (mInsn.owner.equals(galaxyPreviewClass) && mInsn.desc.equals("()V")) {
+                                    throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "reconfigureGenerator", "Collision");
+                                }
+                            }
+                        }
+                    }
+
+                    if (allowPreviewMethod == null) {
+                        throw new OutdatedDeobfuscatorException("Widget", STAR_GENERATOR_INTERFACE, "allowPreview", "Missing/Absent reference");
+                    }
+                    if (setPreviewGeneratorMethod == null) {
+                        throw new OutdatedDeobfuscatorException("Widget", GALAXY_PREVIEW_WIDGET_CLASS, "setGenerator", "Not present");
+                    }
+                    remapMethod(mappingsStream, starGeneratorInterface, allowPreviewMethod, "allowPreview", "()Z");
+                    remapMethod(mappingsStream, galaxyPreviewClass, setPreviewGeneratorMethod, "setGenerator", "(L" + starGeneratorInterface + ";)V");
+                } else if (method.name.equals(widgetRefreshLayoutMethod) && method.desc.equals("()V")) {
                     String targettedMethod = null;
                     for (AbstractInsnNode insn : method.instructions) {
                         if (insn.getOpcode() == Opcodes.INVOKEVIRTUAL) {
@@ -5743,12 +5844,80 @@ public class Autodeobf implements StarmappedNames {
                         throw new OutdatedDeobfuscatorException("Widget", SPACE_CLASS, "starCount", "Not found");
                     }
                     remapField(mappingsStream, SPACE_CLASS, starCountField, "starCount", "F");
+                } else if (method.name.equals(widgetDrawMethod) && method.desc.equals("()V")) {
+                    MethodInsnNode mInsn = getNextOrNull(method.instructions.getFirst(), Opcodes.INVOKEVIRTUAL);
+                    MethodInsnNode drawDefaultBackgroundInsn = null;
+                    while (mInsn != null) {
+                        insnCheck:
+                        if (mInsn.desc.equals("()V") && mInsn.getPrevious().getOpcode() == Opcodes.ALOAD && ((VarInsnNode) mInsn.getPrevious()).var == 0) {
+                            for (MethodNode method2 : widgetClass.methods) {
+                                if (method2.name.equals(mInsn.name) && method2.desc.equals("()V")) {
+                                    FieldInsnNode fInsn = getNextOrNull(method2.instructions.getFirst(), Opcodes.GETSTATIC);
+                                    if (fInsn == null || !fInsn.owner.equals(GALCOLOR_CLASS) || !fInsn.name.equals("NEAR_SOLID") || !fInsn.desc.equals("L" + GALCOLOR_CLASS + ";")) {
+                                        break insnCheck;
+                                    }
+                                    if (widgetDrawDefaultBackgroundMethod != null) {
+                                        throw new OutdatedDeobfuscatorException("Widget", WIDGET_CLASS, "drawDefaultBackground", "Collision");
+                                    }
+                                    widgetDrawDefaultBackgroundMethod = mInsn.name;
+                                    drawDefaultBackgroundInsn = mInsn;
+                                }
+                            }
+                        }
+                        mInsn = getNextOrNull(mInsn, Opcodes.INVOKEVIRTUAL);
+                    }
+
+                    if (drawDefaultBackgroundInsn == null) {
+                        throw new OutdatedDeobfuscatorException("Widget", WIDGET_CLASS, "drawDefaultBackground", "Absent/Missing instruction");
+                    }
+
+                    mInsn = getNextOrNull(drawDefaultBackgroundInsn, Opcodes.INVOKESTATIC);
+                    if (!mInsn.owner.equals(GALFX_CLASS) || !mInsn.desc.equals("(FFFFL" + GALCOLOR_CLASS + ";ZL" + GDX_CAMERA_CLASS + ";)V")) {
+                        throw new OutdatedDeobfuscatorException("Widget", GALFX_CLASS, "drawRectangle", "Invalid owner or descriptor");
+                    }
+
+                    fxDrawRectMethod = mInsn.name;
+                    remapMethod(mappingsStream, GALFX_CLASS, fxDrawRectMethod, "drawRectangle", "(FFFFL" + GALCOLOR_CLASS + ";ZL" + GDX_CAMERA_CLASS + ";)V");
                 }
             }
 
             // Resolve more GalFX#drawTexture methods
             methodLoop:
             for (MethodNode method : galFXNode.methods) {
+                if (method.name.equals(fxDrawRectMethod) && method.desc.equals("(FFFFL" + GALCOLOR_CLASS + ";ZL" + GDX_CAMERA_CLASS + ";)V")) {
+                    MethodInsnNode minsn = getNextOrNull(method.instructions.getFirst(), Opcodes.INVOKESTATIC);
+                    if (getNextOrNull(minsn, Opcodes.INVOKESTATIC) != null) {
+                        throw new OutdatedDeobfuscatorException("Widget", GALFX_CLASS, "drawRectangle", "Multiple delegate candidates");
+                    }
+                    if (!minsn.owner.equals(GALFX_CLASS)) {
+                        throw new OutdatedDeobfuscatorException("Widget", GALFX_CLASS, "drawRectangle", "Invalid delegate owner");
+                    }
+                    remapMethod(mappingsStream, GALFX_CLASS, fxDrawRectMethod, "drawRectangle", minsn.desc);
+                    methodLoop2:
+                    for (MethodNode method2 : galFXNode.methods) {
+                        if (method2.name.equals(minsn.name) && method2.desc.equals(minsn.desc)) {
+                            MethodInsnNode mInsn2 = getNext(method2.instructions.getFirst(), Opcodes.INVOKESTATIC);
+                            mInsn2 = getNext(mInsn2, Opcodes.INVOKESTATIC);
+                            final MethodInsnNode witnessInsn = mInsn2;
+                            if (!witnessInsn.owner.equals(GALFX_CLASS)) {
+                                throw new OutdatedDeobfuscatorException("Widget", GALFX_CLASS, "drawLine", "Invalid owner");
+                            }
+                            for (int i = 0; i < 3; i++) {
+                                mInsn2 = getNextOrNull(mInsn2, Opcodes.INVOKESTATIC);
+                                if (mInsn2 == null) {
+                                    throw new OutdatedDeobfuscatorException("Widget", GALFX_CLASS, "drawLine", "Repeating insn not repeating - exhausted");
+                                }
+                                if (!mInsn2.owner.equals(GALFX_CLASS) || !witnessInsn.name.equals(mInsn2.name) || !witnessInsn.desc.equals(mInsn2.desc)) {
+                                    throw new OutdatedDeobfuscatorException("Widget", GALFX_CLASS, "drawLine", "Repeating insn not repeating - owner, name or desc mismatch");
+                                }
+                            }
+                            remapMethod(mappingsStream, GALFX_CLASS, mInsn2.name, "drawLine", mInsn2.desc);
+                            break methodLoop2;
+                        }
+                    }
+                    continue;
+                }
+
                 for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
                     if (insn.getOpcode() != -1
                             && insn.getOpcode() != Opcodes.ALOAD
@@ -5845,6 +6014,10 @@ public class Autodeobf implements StarmappedNames {
                     break;
                 }
             }
+        }
+
+        if (widgetDrawDefaultBackgroundMethod == null) {
+            throw new OutdatedDeobfuscatorException("Widget", WIDGET_CLASS, "drawDefaultBackground", "Not found");
         }
 
         if (widgetClearChildrenMethod == null) {
@@ -5945,7 +6118,6 @@ public class Autodeobf implements StarmappedNames {
             }
         }
 
-        ClassNode widgetClass = name2Node.get(WIDGET_CLASS);
         if (widgetClass.interfaces.size() != 1) {
             throw new OutdatedDeobfuscatorException("Widget", "Widget implements more/fewer classes than expected.");
         }
@@ -6429,6 +6601,7 @@ public class Autodeobf implements StarmappedNames {
                     remapMethod(mappingsStream, node.name, widgetHoverMethod, "hover", "(FFZ)V");
                     remapMethod(mappingsStream, node.name, widgetConsiderRelayoutMethod, "considerRelayout", "()V");
                     remapMethod(mappingsStream, node.name, widgetMouseDownMethod, "mouseDown", "(DD)V");
+                    remapMethod(mappingsStream, node.name, widgetDrawDefaultBackgroundMethod, "drawDefaultBackground", "()V");
                 }
                 remapMethod(mappingsStream, node.name, widgetRecieveMessageMethod, "recieveMessage", "(L" + WIDGET_MESSAGE_CLASS + ";)V");
             } else if (isInstanceofClass(node, widgetLayoutClass)) {

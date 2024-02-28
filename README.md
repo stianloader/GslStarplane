@@ -52,7 +52,7 @@ pluginManagement {
 And that is it! Unfortunately you won't be able to use the plugin for much
 with such a setup. So continue reading!
 
-## Specifing reversible access setters
+## Specifying reversible access setters
 
 **WARNING:** Reversible access setters are as dangerous as they are simple to
 use. Changing access of a method could make methods that normally would be
@@ -134,7 +134,7 @@ remapJar {
 ```
 
 Sometimes muscle memory gets the better of you and you are still
-acustomed to using `build` to create jars. Unfortunately, by default, `build`
+accustomed to using `build` to create jars. Unfortunately, by default, `build`
 does not create a remapped jar. In order for the `build` task to also remap,
 one can make `build` depend on `remapJar`. In practice this would look as
 follows:
@@ -177,8 +177,8 @@ will get removed in order to avoid duplicates.
 During the copy process the starplane annotations will get evaluated.
 
 **WARNING:** Removing a mod from the `deployMods` list will not remove them
-from the extensions folder yet. This may get changed should there be sufficent
-momentuum.
+from the extensions folder yet. This may get changed should there be sufficient
+momentum.
 
 Reversible access setters from other mods ("transitive reversible access
 setters") are not applied at compile-time, but are applied as usual at
@@ -247,7 +247,7 @@ What these arbitrary files are is evaluated by the `genEclipseRuns` task
 and can be set by the buildscript using the
 `additionalRuntimeDependency(String, Object)` method.
 
-As gslStarplane will treat each source set as a seperate mod, the individual mods
+As gslStarplane will treat each source set as a separate mod, the individual mods
 of your project are identified using the source set's name. This will generally be
 `main`. The most common use of this feature will as such look as follows:
 
@@ -265,17 +265,17 @@ The value is a path element which is one of the following:
 
 ## Selecting the Mod loader (the `devRuntime` configuration)
 
-As of now, only the Starloader launcher can be used as a mod loader (though
-in theory modloaders that work as javaagents can easily be added). The version
+As of now, only SLL - regardless of mixin engine - can be used as a mod loader,
+though in theory modloaders that work as javaagents can easily be added. The version
 used depends on the contents of the devRuntime configuration classpath
-- so the starloader launcher needs to be either present on the runtime classpath
-or be explicitly declared as being part of the devRuntime configuration in order
-for the dev env to work. The Starloader Launcher can thus be declared as follows:
+- so SLL needs to be either present on the runtime classpath or be explicitly
+declared as being part of the devRuntime configuration in order for the dev env
+to work. SLL can thus be declared as follows:
 
 ```groovy
 dependencies {
     // [...]
-    devRuntime "de.geolykt.starloader:launcher:4.0.0-20230520"
+    devRuntime "org.stianloader:launcher-micromixin:4.0.0-a20240227"
     // [...]
 }
 ```
@@ -286,7 +286,7 @@ However as this may has consequences on classloading that may be removed
 in the future (it is plausible that all runtime elements will be available to us
 anyways due to shading).
 
-It is generally not adviseable to add mods through the devRuntime, instead the
+It is generally not advisable to add mods through the devRuntime, instead the
 deployMods should be configured accordingly. Failure to understand this may
 result in mods not properly loading or other classloading issues.
 
