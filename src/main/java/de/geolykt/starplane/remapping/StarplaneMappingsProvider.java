@@ -68,15 +68,16 @@ public class StarplaneMappingsProvider implements IMappingProvider {
                         out.acceptClass(colums[1], colums[2]);
                     }
                 } else if (type.equals("METHOD")) {
-                    // Format: METHOD owner originalName descriptor newName
-                    //                11111 222222222222 3333333333 4444444
                     if (colums.length != 5) {
                         throw new IOException("Line " + lineNr + " is of type CLASS, but only " + colums.length + " colums are present, even though it expects 5.");
                     }
+                    // The official tinyV1 mappings format that actually makes sense
+                    // Format: METHOD owner descriptor originalName newName
+                    //                11111 2222222222 333333333333 4444444
                     if (this.reverse) {
-                        out.acceptMethod(new Member(colums[1], colums[4], colums[3]), colums[2]);
+                        out.acceptMethod(new Member(colums[1], colums[4], colums[2]), colums[3]);
                     } else {
-                        out.acceptMethod(new Member(colums[1], colums[2], colums[3]), colums[4]);
+                        out.acceptMethod(new Member(colums[1], colums[3], colums[2]), colums[4]);
                     }
                 } else if (type.equals("FIELD")) {
                     // Format: FIELD owner descriptor originalName newName

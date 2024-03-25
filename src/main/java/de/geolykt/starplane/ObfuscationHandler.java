@@ -212,8 +212,7 @@ public class ObfuscationHandler {
             LOGGER.info("Deobfuscated classes in " + (System.currentTimeMillis() - startDeobf) + " ms.");
             long startIntermediarisation = System.currentTimeMillis();
 
-            IntermediaryGenerator generator = new IntermediaryGenerator(map, null,
-                    deobfuscator.getClassNodesDirectly());
+            IntermediaryGenerator generator = new IntermediaryGenerator(map, null, deobfuscator.getClassNodesDirectly());
             generator.useAlternateClassNaming(!Boolean.getBoolean("de.geolykt.starplane.oldnames"));
             generator.remapClassesV2(true);
             deobfuscator.fixSwitchMaps();

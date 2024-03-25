@@ -26,16 +26,16 @@ repositories {
 }
 
 dependencies {
-    implementation "de.geolykt.starloader:sl-deobf:0.1.1-a20231127"
+    implementation "de.geolykt.starloader:sl-deobf:0.2.0"
     implementation "de.geolykt.starloader:reversible-access-setter:1.0.0"
     implementation gradleApi()
-    implementation "org.ow2.asm:asm:9.6"
-    implementation "org.ow2.asm:asm-tree:9.6"
-    implementation "org.ow2.asm:asm-util:9.6"
-    implementation "org.ow2.asm:asm-commons:9.6"
+    implementation "org.ow2.asm:asm:9.7"
+    implementation "org.ow2.asm:asm-tree:9.7"
+    implementation "org.ow2.asm:asm-util:9.7"
+    implementation "org.ow2.asm:asm-commons:9.7"
 
     // https://mvnrepository.com/artifact/org.json/json
-    implementation 'org.json:json:20240205'
+    implementation 'org.json:json:20240303'
 
     // https://mvnrepository.com/artifact/net.fabricmc/tiny-remapper
     implementation 'net.fabricmc:tiny-remapper:0.10.1'

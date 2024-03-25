@@ -2261,8 +2261,8 @@ public class Autodeobf implements StarmappedNames {
         }
         try {
             this.remapper.remapMethod(owner, desc, oldName, newName);
-            // Format: METHOD owner originalName descriptor newName
-            mappingsOut.write("METHOD " + owner + " " + oldName + " " + desc + " " +  newName + "\n");
+            // Format (for valid tiny files): METHOD owner desc srcName dstName
+            mappingsOut.write("METHOD " + owner + " " + desc + " " + oldName + " " +  newName + "\n");
         } catch (ConflicitingMappingException e) {
             try {
                 throw new RuntimeException("Old mapping: " + this.remapper.getRemappedClassName(owner) + "." + this.remapper.getRemappedMethodName(owner, oldName, desc) + this.remapper.getRemappedMethodDescriptor(desc, new StringBuilder()) + ". Proposed: " + this.remapper.getRemappedClassName(owner) + "." + newName + desc, e);
