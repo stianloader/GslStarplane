@@ -23,22 +23,30 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeSet;
 import java.util.jar.JarFile;
 import java.util.zip.Adler32;
 import java.util.zip.CheckedInputStream;
+import java.util.zip.Checksum;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-import org.gradle.internal.impldep.com.google.common.base.Objects;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.stianloader.softmap.SoftmapApplicationError;
+import org.stianloader.softmap.SoftmapContext;
+import org.stianloader.softmap.SoftmapContext.ApplicationResult;
+import org.stianloader.softmap.SoftmapParseError;
+import org.stianloader.softmap.tokens.Token;
 
 import net.fabricmc.tinyremapper.OutputConsumerPath;
 import net.fabricmc.tinyremapper.TinyRemapper;
@@ -58,13 +66,36 @@ import de.geolykt.starplane.remapping.StarplaneMappingsProvider;
 
 public class ObfuscationHandler {
 
+    @NotNull
+    private static final String COMPILED_SOFTMAP_FILE_NAME = "compiled-softmap.tiny";
+    @NotNull
     private static final String INTERMEDIARY_FILE_NAME = "slintermediary.tiny";
-    private static final String STARMAP_FILE_NAME = "spstarmap.tiny";
-    private static final byte[] IO_BUFFER = new byte[4096];
+    private static final byte @NotNull[] IO_BUFFER = new byte[4096];
     private static final Logger LOGGER = LoggerFactory.getLogger(ObfuscationHandler.class);
+    @NotNull
+    private static final String STARMAP_FILE_NAME = "spstarmap.tiny";
 
-    @Nullable
-    private final String rasContent;
+    private static String getStarplaneChecksum() throws IOException {
+        try (InputStream autodeobfClass = Autodeobf.class.getClassLoader().getResourceAsStream("de/geolykt/starplane/Autodeobf.class");
+                CheckedInputStream checkedIn = new CheckedInputStream(autodeobfClass, new Adler32())) {
+            while (checkedIn.read(ObfuscationHandler.IO_BUFFER) != -1); // read the entire input stream until it is exhausted
+            return Long.toUnsignedString(checkedIn.getChecksum().getValue(), Character.MAX_RADIX);
+        }
+    }
+
+    @SuppressWarnings("null")
+    @NotNull
+    private static String toHexHash(byte[] hash) {
+        final StringBuilder hex = new StringBuilder(2 * hash.length);
+        for (final byte b : hash) {
+            int x = ((int) b) & 0x00FF;
+            if (x < 16) {
+                hex.append('0');
+            }
+            hex.append(Integer.toHexString(x));
+        }
+        return hex.toString();
+    }
 
     @NotNull
     private final Path cacheDir;
@@ -74,10 +105,68 @@ public class ObfuscationHandler {
     @NotNull
     private final Path projectDir;
 
-    public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String rasContent) {
+    @Nullable
+    private final String rasContent;
+
+    @NotNull
+    @Unmodifiable
+    private final Collection<@NotNull File> softmapFiles;
+
+    public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String rasContent,
+            @NotNull @Unmodifiable Collection<@NotNull File> softmapFiles) {
         this.cacheDir = cacheDir;
         this.projectDir = projectDir;
         this.rasContent = rasContent;
+        this.softmapFiles = softmapFiles;
+    }
+
+    private void addSignatures(List<ClassNode> nodes, Map<String, ClassNode> nameToNode,
+            Map<MethodReference, ClassWrapper> signatures) {
+        StringBuilder builder = new StringBuilder();
+        for (ClassNode node : nodes) {
+            for (MethodNode method : node.methods) {
+                if (method.signature == null) {
+                    ClassWrapper newSignature = signatures.get(new MethodReference(node.name, method));
+                    if (newSignature == null) {
+                        continue;
+                    }
+                    builder.append(method.desc, 0, method.desc.length() - 1);
+                    builder.append("<L");
+                    builder.append(newSignature.getName());
+                    builder.append(";>;");
+                    method.signature = builder.toString();
+                    builder.setLength(0);
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof ObfuscationHandler) {
+            ObfuscationHandler other = (ObfuscationHandler) obj;
+            return Objects.equals(this.rasContent, other.rasContent)
+                    && this.cacheDir.equals(other.cacheDir)
+                    && this.projectDir.equals(other.projectDir)
+                    && this.softmapFiles.equals(other.softmapFiles);
+        }
+        return false;
+    }
+
+    @NotNull
+    private String getSoftmapChecksums() throws IOException {
+        if (this.softmapFiles.isEmpty()) {
+            return "0";
+        }
+
+        Checksum csum = new Adler32();
+        for (File f : this.softmapFiles) {
+            try (CheckedInputStream cis = new CheckedInputStream(Files.newInputStream(f.toPath()), csum)) {
+                while (cis.read(ObfuscationHandler.IO_BUFFER) != -1); // Discard all read bytes
+            }
+        }
+
+        return Long.toUnsignedString(csum.getValue(), Character.MAX_RADIX);
     }
 
     @NotNull
@@ -111,7 +200,7 @@ public class ObfuscationHandler {
         }
 
         try {
-            currentHash = currentHash + '-' + getStarplaneChecksum();
+            currentHash = currentHash + '-' + ObfuscationHandler.getStarplaneChecksum() + '-' + this.getSoftmapChecksums();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -122,7 +211,7 @@ public class ObfuscationHandler {
                 String readLine = br.readLine();
                 if (!readLine.equalsIgnoreCase(currentHash)) {
                     recomputeAw = true;
-                    LOGGER.info("AW Hash mismatch. Expected: " + readLine + ", but the current aw hash is " + currentHash);
+                    ObfuscationHandler.LOGGER.warn("AW Hash mismatch. Expected: " + readLine + ", but the current aw hash is " + currentHash + ". Caches are considered invalid.");
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -139,7 +228,7 @@ public class ObfuscationHandler {
             return compileAccess;
         }
 
-        didRefresh = true;
+        this.didRefresh = true;
 
         // Now, somehow obtain the galim jar
         File cleanGalimJar = new File(this.projectDir.toFile(), "galimulator-desktop.jar");
@@ -183,7 +272,7 @@ public class ObfuscationHandler {
 
         LOGGER.info("Using the base galimulator jar found at " + cleanGalimJar.getAbsolutePath());
 
-        Path map = this.cacheDir.resolve(INTERMEDIARY_FILE_NAME);
+        Path map = this.cacheDir.resolve(ObfuscationHandler.INTERMEDIARY_FILE_NAME);
         Oaktree deobfuscator = new Oaktree();
         try {
             long start = System.currentTimeMillis();
@@ -225,7 +314,7 @@ public class ObfuscationHandler {
                 remapper.addTargets(deobfuscator.getClassNodesDirectly());
                 long startSlStarmap = System.currentTimeMillis();
                 Autodeobf deobf = new Autodeobf(deobfuscator.getClassNodesDirectly(), remapper);
-                try (Writer writer = Files.newBufferedWriter(this.cacheDir.resolve(STARMAP_FILE_NAME), StandardOpenOption.CREATE)) {
+                try (Writer writer = Files.newBufferedWriter(this.cacheDir.resolve(ObfuscationHandler.STARMAP_FILE_NAME), StandardOpenOption.CREATE)) {
                     writer.write("v1\tintermediary\tnamed\n");
                     deobf.runAll(writer);
                     for (Map.Entry<String, String> e : remapper.fixICNNames(new StringBuilder()).entrySet()) {
@@ -240,7 +329,49 @@ public class ObfuscationHandler {
                 }
                 LOGGER.info("Computed spStarmap in " + (System.currentTimeMillis() - startSlStarmap) + " ms.");
             } catch (Exception e) {
-                throw new RuntimeException("Cannot write mappings", e);
+                throw new RuntimeException("Cannot write Autodeobf.java-generated mappings", e);
+            }
+
+            try {
+                Path compiledSoftmap = this.cacheDir.resolve(ObfuscationHandler.COMPILED_SOFTMAP_FILE_NAME);
+                if (this.softmapFiles.isEmpty()) {
+                    Files.deleteIfExists(compiledSoftmap);
+                } else {
+                    Remapper remapper = new Remapper();
+                    remapper.addTargets(deobfuscator.getClassNodesDirectly());
+                    long startOfSoftmap = System.currentTimeMillis();
+
+                    @SuppressWarnings("null")
+                    @NotNull
+                    List<@NotNull ClassNode> nodes = deobfuscator.getClassNodesDirectly();
+                    List<@NotNull String> allTiny = new ArrayList<>();
+
+                    allTiny.add("v1\tintermediary\tnamed");
+                    allTiny.add("# This file was compiled from softmap files, do not touch unless you know what you are doing");
+
+                    for (File softmapFile : this.softmapFiles) {
+                        List<@NotNull String> generatedTiny = this.compileSoftmap(softmapFile, nodes);
+                        allTiny.addAll(generatedTiny);
+                        for (String s : generatedTiny) {
+                            System.err.println("GENERATED TINY: " + s);
+                            String[] parts = s.split("\\s+");
+                            if (parts[0].equals("METHOD")) {
+                                remapper.remapMethod(parts[1], parts[2], parts[3], parts[4]);
+                            } else if (parts[0].equals("FIELD")) {
+                                remapper.remapField(parts[1], parts[2], parts[3], parts[4]);
+                            } else if (parts[0].equals("CLASS")) {
+                                remapper.remapClassName(parts[1], parts[2]);
+                            }
+                        }
+                        remapper.process();
+                    }
+
+                    Files.write(compiledSoftmap, allTiny, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+                    ObfuscationHandler.LOGGER.info("Compiled all softmap files in " + (System.currentTimeMillis() - startOfSoftmap) + "ms.");
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Cannot write softmap-generated mappings", e);
             }
 
             deobfuscator.invalidateNameCaches();
@@ -369,59 +500,73 @@ public class ObfuscationHandler {
         return compileAccess;
     }
 
-    private static String getStarplaneChecksum() throws IOException {
-        try (InputStream autodeobfClass = Autodeobf.class.getClassLoader().getResourceAsStream("de/geolykt/starplane/Autodeobf.class");
-                CheckedInputStream checkedIn = new CheckedInputStream(autodeobfClass, new Adler32())) {
-            while (checkedIn.read(IO_BUFFER) != -1); // read the entire input stream until it is exhausted
-            return Long.toString(checkedIn.getChecksum().getValue());
-        }
-    }
-
-    @SuppressWarnings("null")
     @NotNull
-    private static String toHexHash(byte[] hash) {
-        final StringBuilder hex = new StringBuilder(2 * hash.length);
-        for (final byte b : hash) {
-            int x = ((int) b) & 0x00FF;
-            if (x < 16) {
-                hex.append('0');
+    @Unmodifiable
+    @Contract(pure = true)
+    private List<@NotNull String> compileSoftmap(@NotNull File softmapFile, @NotNull List<@NotNull ClassNode> obfuscatedNodes) throws IOException {
+        long fileStart = System.currentTimeMillis();
+        String softmapContent = Files.readString(softmapFile.toPath(), StandardCharsets.UTF_8);
+        SoftmapContext softmapContext = SoftmapContext.parse(softmapContent, 0, softmapContent.length(), 1, 1);
+
+        List<SoftmapParseError> parseErrors = softmapContext.getParseErrors();
+        if (!parseErrors.isEmpty()) {
+            System.out.println();
+            for (SoftmapParseError error : parseErrors) {
+                String contentSplice;
+                if (error.endCodepoint - error.startCodepoint < 100) {
+                    contentSplice = softmapContent.substring(error.startCodepoint, error.endCodepoint);
+                } else {
+                    contentSplice = softmapContent.substring(error.startCodepoint, error.startCodepoint + 80);
+                    contentSplice = contentSplice + "... (and " + (error.endCodepoint - error.startCodepoint - 80) + " further characters)";
+                }
+                ObfuscationHandler.LOGGER.error("Syntax error in softmap file {} (row {}, column {}): {}", softmapFile, error.row, error.column, error.getDescription());
+                ObfuscationHandler.LOGGER.error("Invalid token: {}", contentSplice);
             }
-            hex.append(Integer.toHexString(x));
+            System.out.println();
         }
-        return hex.toString();
+
+        @SuppressWarnings("null")
+        ApplicationResult result = softmapContext.tryApply(obfuscatedNodes);
+
+        List<SoftmapApplicationError> applyErrors = result.getErrors();
+        if (!applyErrors.isEmpty()) {
+            System.out.println();
+            for (SoftmapApplicationError error : applyErrors) {
+                String contentSplice;
+                Token errorLoc = error.getErrorLocation();
+                if (errorLoc.getStart() - errorLoc.getEnd() < 100) {
+                    contentSplice = softmapContent.substring(errorLoc.getStart(), errorLoc.getEnd());
+                } else {
+                    contentSplice = softmapContent.substring(errorLoc.getStart(), errorLoc.getStart() + 80);
+                    contentSplice = contentSplice + "... (and " + (errorLoc.getEnd() - errorLoc.getStart() - 80) + " further characters)";
+                }
+                ObfuscationHandler.LOGGER.error("Application error in softmap file {} (row {}, column {}): {}.", softmapFile, errorLoc.getRow(), errorLoc.getColumn(), error.getDescription());
+                ObfuscationHandler.LOGGER.error("Invalid token: {}", contentSplice);
+            }
+            System.out.println();
+        }
+
+        ObfuscationHandler.LOGGER.info("Softmap file {} compiled in {}ms.", softmapFile, (System.currentTimeMillis() - fileStart));
+        return result.getGeneratedTinyV1Mappings();
     }
 
-    private void addSignatures(List<ClassNode> nodes, Map<String, ClassNode> nameToNode,
-            Map<MethodReference, ClassWrapper> signatures) {
-        StringBuilder builder = new StringBuilder();
-        for (ClassNode node : nodes) {
-            for (MethodNode method : node.methods) {
-                if (method.signature == null) {
-                    ClassWrapper newSignature = signatures.get(new MethodReference(node.name, method));
-                    if (newSignature == null) {
-                        continue;
-                    }
-                    builder.append(method.desc, 0, method.desc.length() - 1);
-                    builder.append("<L");
-                    builder.append(newSignature.getName());
-                    builder.append(";>;");
-                    method.signature = builder.toString();
-                    builder.setLength(0);
-                }
-            }
-        }
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.rasContent, this.cacheDir, this.projectDir, this.softmapFiles);
     }
 
     public void reobfuscateJar(@NotNull Path jarPath, @NotNull Path starmappedGalimulator,
             @NotNull Collection<@NotNull Path> alsoInclude) throws IOException {
-        Path spstarmap = this.cacheDir.resolve(STARMAP_FILE_NAME);
-        Path slintermediary = this.cacheDir.resolve(INTERMEDIARY_FILE_NAME);
+        Path spstarmap = this.cacheDir.resolve(ObfuscationHandler.STARMAP_FILE_NAME);
+        Path slintermediary = this.cacheDir.resolve(ObfuscationHandler.INTERMEDIARY_FILE_NAME);
+        Path compiledSoftmap = this.cacheDir.resolve(ObfuscationHandler.COMPILED_SOFTMAP_FILE_NAME);
 
         TinyRemapper tinyRemapper = TinyRemapper.newRemapper()
                 .withMappings(
                         new MultiMappingProvider(
                                 new StarplaneMappingsProvider(slintermediary, true),
-                                new StarplaneMappingsProvider(spstarmap, true)
+                                new StarplaneMappingsProvider(spstarmap, true),
+                                new StarplaneMappingsProvider(compiledSoftmap, true, true)
                         )
                 ).extension(new StarplaneAnnotationRemapper())
                 .extension(new MixinExtension())
@@ -447,21 +592,5 @@ public class ObfuscationHandler {
         }
         Files.move(intermediaryBuild, jarPath, StandardCopyOption.REPLACE_EXISTING);
         LOGGER.info("Reobfuscating... (done)");
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof ObfuscationHandler) {
-            ObfuscationHandler other = (ObfuscationHandler) obj;
-            return Objects.equal(this.rasContent, other.rasContent)
-                    && this.cacheDir.equals(other.cacheDir)
-                    && this.projectDir.equals(other.projectDir);
-        }
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(this.rasContent, this.cacheDir, this.projectDir);
     }
 }

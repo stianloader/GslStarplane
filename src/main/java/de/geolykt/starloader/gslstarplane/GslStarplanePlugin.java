@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -125,7 +126,18 @@ public class GslStarplanePlugin implements Plugin<Project> {
         Path altCache = project.getLayout().getBuildDirectory().getAsFile().get().toPath().resolve("gsl-starplane");
 
         GslExtension extension = project.getExtensions().getByType(GslExtension.class);
-        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getRASContents(project));
+
+        Set<File> softmapFiles = new HashSet<>();
+        for (Object notation : extension.softmapMappings) {
+            if (notation instanceof Configuration) {
+                softmapFiles.addAll(((Configuration) notation).resolve());
+            } else {
+                softmapFiles.add(project.file(notation));
+            }
+        }
+        softmapFiles = Collections.unmodifiableSet(softmapFiles);
+
+        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getRASContents(project), softmapFiles);
         OBF_HANDLERS.put(project, oHandler);
         resolve(project, oHandler);
         JavaExec runTask = RUN_TASKS.get(project);

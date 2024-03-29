@@ -19,16 +19,26 @@ public class StarplaneMappingsProvider implements IMappingProvider {
     private final Path map;
 
     private final boolean reverse;
+    private final boolean ignoreNonExistentFiles;
 
     public StarplaneMappingsProvider(@NotNull Path map, boolean reversed) {
+        this(map, reversed, false);
+    }
+
+    public StarplaneMappingsProvider(@NotNull Path map, boolean reversed, boolean ignoreNonExistentFiles) {
         this.map = map;
         this.reverse = reversed;
+        this.ignoreNonExistentFiles = ignoreNonExistentFiles;
     }
 
     @Override
     public void load(MappingAcceptor out) {
+        if (this.ignoreNonExistentFiles && Files.notExists(this.map)) {
+            return;
+        }
+
         int lineNr = 0;
-        try (BufferedReader br = Files.newBufferedReader(map, StandardCharsets.UTF_8)) {
+        try (BufferedReader br = Files.newBufferedReader(this.map, StandardCharsets.UTF_8)) {
             // the first line must specify the version of tiny and the namespace.
             // we are going to ignore the namespace as they just produce too much headache
             String header = br.readLine();

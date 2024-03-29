@@ -263,7 +263,7 @@ The value is a path element which is one of the following:
  - All other types that can be converted to `File`
    as per [Project#file](https://docs.gradle.org/8.1/javadoc/org/gradle/api/Project.html#file-java.lang.Object-).
 
-## Selecting the Mod loader (the `devRuntime` configuration)
+## Selecting the modloader (the `devRuntime` configuration)
 
 As of now, only SLL - regardless of mixin engine - can be used as a mod loader,
 though in theory modloaders that work as javaagents can easily be added. The version
@@ -290,11 +290,41 @@ It is generally not advisable to add mods through the devRuntime, instead the
 deployMods should be configured accordingly. Failure to understand this may
 result in mods not properly loading or other classloading issues.
 
-## Selecting the Mappings
+## Selecting the mappings
 
 At the moment only spStarmap ontop of slintermediary can be used.
 In the (far) future other variants of deobfuscation mappings (such as mmStarmap)
 may get supported.
+
+### Declaring softmaps
+
+*Note: This is an experimental feature and is subject to change*
+
+**WARNING**: At this point in time layered mappings are planned, but not yet
+fully supported. Handle multiple softmap mappings with care, as current behaviour
+is subject to change.
+
+Softmap is a purpose built deobfuscation mappings format that is most resistant
+against changes in the source names. Unlike other mappings format, this format
+doesn't map things based on 1:1 mappings. Instead, it uses context clues, such
+as the bytecode of methods, descriptors, usages, and more. How these context
+clues are used can be freely choosen by whoever write the softmap mappings files.
+
+Unlike slintermediary and spStarmap, softmap mappings files can be freely choosen
+by the buildscript, meaning that you can easily swap out names if you feel like
+not working with them. By default gslStarplane does not ship any softmap mappings
+file. One way to define a mappings file would be:
+
+```groovy
+starplane {
+    softmapFile("softmap.softmap")
+}
+```
+
+Aside from `String`, following types can be used:
+ - A `Configuration`
+ - All types that can be converted to `File`
+   as per [Project#file](https://docs.gradle.org/8.1/javadoc/org/gradle/api/Project.html#file-java.lang.Object-).
 
 ## Decompilation
 

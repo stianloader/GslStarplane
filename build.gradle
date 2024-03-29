@@ -26,8 +26,11 @@ repositories {
 }
 
 dependencies {
+    // https://mvnrepository.com/artifact/de.geolykt.starloader/sl-deobf
     implementation "de.geolykt.starloader:sl-deobf:0.2.0"
+    // https://mvnrepository.com/artifact/de.geolykt.starloader/reversible-access-setter
     implementation "de.geolykt.starloader:reversible-access-setter:1.0.0"
+
     implementation gradleApi()
     implementation "org.ow2.asm:asm:9.7"
     implementation "org.ow2.asm:asm-tree:9.7"
@@ -41,6 +44,8 @@ dependencies {
     implementation 'net.fabricmc:tiny-remapper:0.10.1'
     // https://mvnrepository.com/artifact/org.vineflower/vineflower
     implementation 'org.vineflower:vineflower:1.9.3'
+
+    implementation 'org.stianloader:softmap:0.1.0-a20240329'
 
     // https://mvnrepository.com/artifact/org.jetbrains/annotations
     compileOnly group: 'org.jetbrains', name: 'annotations', version: '24.1.0'
