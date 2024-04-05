@@ -43,7 +43,7 @@ dependencies {
     // https://mvnrepository.com/artifact/net.fabricmc/tiny-remapper
     implementation 'net.fabricmc:tiny-remapper:0.10.1'
     // https://mvnrepository.com/artifact/org.vineflower/vineflower
-    implementation 'org.vineflower:vineflower:1.9.3'
+    implementation 'org.vineflower:vineflower:1.10.0'
 
     // https://mvnrepository.com/artifact/net.fabricmc/mapping-io
     implementation 'net.fabricmc:mapping-io:0.5.1'
