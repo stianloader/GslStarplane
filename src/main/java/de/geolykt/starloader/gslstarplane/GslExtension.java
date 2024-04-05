@@ -5,8 +5,11 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
@@ -19,6 +22,8 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.resources.TextResource;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import net.fabricmc.mappingio.format.MappingFormat;
 
 import groovy.lang.Closure;
 
@@ -35,6 +40,8 @@ public class GslExtension {
     public final List<Object> externalMods = new ArrayList<>();
     @Nullable
     public List<Object> internalMods;
+    @NotNull
+    public final List<Map.Entry<@NotNull MappingFormat, @NotNull Object>> mappings = new ArrayList<>();
     @Nullable
     public Path modDirectory;
     @Nullable
@@ -79,6 +86,36 @@ public class GslExtension {
         for (BiConsumer<ModType, Object> hook : this.updateHooks) {
             hook.accept(ModType.INTERNAL, notation);
         }
+    }
+
+    public void mappingsFile(@NotNull String format, @NotNull Object notation) {
+        MappingFormat mFormat = null;
+        try {
+            mFormat = MappingFormat.valueOf(format.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            for (MappingFormat mf : MappingFormat.values()) {
+                if (mf.name != null && mf.name.equalsIgnoreCase(format)) {
+                    mFormat = mf;
+                    break;
+                }
+            }
+            if (format.equalsIgnoreCase("tiny2") || format.equalsIgnoreCase("tinyv2")) {
+                mFormat = MappingFormat.TINY_2_FILE;
+            } else if (mFormat == null) {
+                for (MappingFormat mf : MappingFormat.values()) {
+                    if (mf.fileExt != null && mf.fileExt.equalsIgnoreCase(format)) {
+                        mFormat = mf;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (mFormat == null) {
+            throw new IllegalArgumentException("No mappings format known under the following name: '" + format + "'");
+        }
+
+        this.mappings.add(new AbstractMap.SimpleImmutableEntry<>(mFormat, notation));
     }
 
     public void softmapFile(@NotNull Object notation) {

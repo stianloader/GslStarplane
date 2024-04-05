@@ -9,10 +9,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -47,6 +50,8 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.slf4j.LoggerFactory;
+
+import net.fabricmc.mappingio.format.MappingFormat;
 
 import de.geolykt.starplane.Autodeobf;
 import de.geolykt.starplane.JarStripper;
@@ -127,17 +132,37 @@ public class GslStarplanePlugin implements Plugin<Project> {
 
         GslExtension extension = project.getExtensions().getByType(GslExtension.class);
 
-        Set<File> softmapFiles = new HashSet<>();
+        Set<Path> softmapFiles = new HashSet<>();
         for (Object notation : extension.softmapMappings) {
             if (notation instanceof Configuration) {
-                softmapFiles.addAll(((Configuration) notation).resolve());
+                for (File f : ((Configuration) notation).resolve()) {
+                    softmapFiles.add(f.toPath());
+                }
+            } else if (notation instanceof Path) {
+                softmapFiles.add((Path) notation);
             } else {
-                softmapFiles.add(project.file(notation));
+                softmapFiles.add(project.file(notation).toPath());
             }
         }
-        softmapFiles = Collections.unmodifiableSet(softmapFiles);
 
-        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getRASContents(project), softmapFiles);
+        List<Map.Entry<@NotNull MappingFormat, @NotNull Path>> supplementaryMappings = new ArrayList<>();
+        for (Map.Entry<@NotNull MappingFormat, @NotNull Object> e : extension.mappings) {
+            Object notation = e.getValue();
+            if (notation instanceof Configuration) {
+                for (File f : ((Configuration) notation).resolve()) {
+                    supplementaryMappings.add(new AbstractMap.SimpleImmutableEntry<>(e.getKey(), f.toPath()));
+                }
+            } else if (notation instanceof Path) {
+                supplementaryMappings.add(new AbstractMap.SimpleImmutableEntry<>(e.getKey(), (Path) notation));
+            } else {
+                supplementaryMappings.add(new AbstractMap.SimpleImmutableEntry<>(e.getKey(), project.file(notation).toPath()));
+            }
+        }
+
+        softmapFiles = Collections.unmodifiableSet(softmapFiles);
+        supplementaryMappings = Collections.unmodifiableList(supplementaryMappings);
+
+        ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getRASContents(project), softmapFiles, supplementaryMappings);
         OBF_HANDLERS.put(project, oHandler);
         resolve(project, oHandler);
         JavaExec runTask = RUN_TASKS.get(project);

@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -21,9 +22,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.jar.JarFile;
 import java.util.zip.Adler32;
@@ -48,6 +53,10 @@ import org.stianloader.softmap.SoftmapContext.ApplicationResult;
 import org.stianloader.softmap.SoftmapParseError;
 import org.stianloader.softmap.tokens.Token;
 
+import net.fabricmc.mappingio.MappingReader;
+import net.fabricmc.mappingio.format.MappingFormat;
+import net.fabricmc.mappingio.tree.MemoryMappingTree;
+import net.fabricmc.mappingio.tree.VisitableMappingTree;
 import net.fabricmc.tinyremapper.OutputConsumerPath;
 import net.fabricmc.tinyremapper.TinyRemapper;
 import net.fabricmc.tinyremapper.extension.mixin.MixinExtension;
@@ -60,6 +69,7 @@ import de.geolykt.starloader.deobf.remapper.Remapper;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformFailure;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformScope;
+import de.geolykt.starplane.remapping.MappingIOMappingProvider;
 import de.geolykt.starplane.remapping.MultiMappingProvider;
 import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
 import de.geolykt.starplane.remapping.StarplaneMappingsProvider;
@@ -110,14 +120,20 @@ public class ObfuscationHandler {
 
     @NotNull
     @Unmodifiable
-    private final Collection<@NotNull File> softmapFiles;
+    private final Collection<@NotNull Path> softmapFiles;
+
+    @NotNull
+    @Unmodifiable
+    private final List<Map.Entry<@NotNull MappingFormat, @NotNull Path>> supplementaryMappings;
 
     public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String rasContent,
-            @NotNull @Unmodifiable Collection<@NotNull File> softmapFiles) {
+            @NotNull @Unmodifiable Collection<@NotNull Path> softmapFiles,
+            @NotNull @Unmodifiable List<Map.Entry<@NotNull MappingFormat, @NotNull Path>> supplementaryMappings) {
         this.cacheDir = cacheDir;
         this.projectDir = projectDir;
         this.rasContent = rasContent;
         this.softmapFiles = softmapFiles;
+        this.supplementaryMappings = supplementaryMappings;
     }
 
     private void addSignatures(List<ClassNode> nodes, Map<String, ClassNode> nameToNode,
@@ -154,14 +170,22 @@ public class ObfuscationHandler {
     }
 
     @NotNull
-    private String getSoftmapChecksums() throws IOException {
-        if (this.softmapFiles.isEmpty()) {
+    private String getAdditionalMappingChecksums() throws IOException {
+        if (this.softmapFiles.isEmpty() && this.supplementaryMappings.isEmpty()) {
             return "0";
         }
 
         Checksum csum = new Adler32();
-        for (File f : this.softmapFiles) {
-            try (CheckedInputStream cis = new CheckedInputStream(Files.newInputStream(f.toPath()), csum)) {
+
+        for (Path p : this.softmapFiles) {
+            try (CheckedInputStream cis = new CheckedInputStream(Files.newInputStream(p), csum)) {
+                while (cis.read(ObfuscationHandler.IO_BUFFER) != -1); // Discard all read bytes
+            }
+        }
+
+        for (Entry<@NotNull MappingFormat, @NotNull Path> e : this.supplementaryMappings) {
+            csum.update(e.getKey().ordinal());
+            try (CheckedInputStream cis = new CheckedInputStream(Files.newInputStream(e.getValue()), csum)) {
                 while (cis.read(ObfuscationHandler.IO_BUFFER) != -1); // Discard all read bytes
             }
         }
@@ -200,7 +224,7 @@ public class ObfuscationHandler {
         }
 
         try {
-            currentHash = currentHash + '-' + ObfuscationHandler.getStarplaneChecksum() + '-' + this.getSoftmapChecksums();
+            currentHash = currentHash + '-' + ObfuscationHandler.getStarplaneChecksum() + '-' + this.getAdditionalMappingChecksums();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -349,11 +373,10 @@ public class ObfuscationHandler {
                     allTiny.add("v1\tintermediary\tnamed");
                     allTiny.add("# This file was compiled from softmap files, do not touch unless you know what you are doing");
 
-                    for (File softmapFile : this.softmapFiles) {
+                    for (Path softmapFile : this.softmapFiles) {
                         List<@NotNull String> generatedTiny = this.compileSoftmap(softmapFile, nodes);
                         allTiny.addAll(generatedTiny);
                         for (String s : generatedTiny) {
-                            System.err.println("GENERATED TINY: " + s);
                             String[] parts = s.split("\\s+");
                             if (parts[0].equals("METHOD")) {
                                 remapper.remapMethod(parts[1], parts[2], parts[3], parts[4]);
@@ -418,7 +441,6 @@ public class ObfuscationHandler {
 
             if (rasInfo == null) {
                 try (OutputStream os = Files.newOutputStream(compileAccess)) {
-                    assert os != null;
                     deobfuscator.write(os, cleanGalimJar.toPath());
                 }
                 // Compile-time Access = Runtime Access
@@ -436,11 +458,11 @@ public class ObfuscationHandler {
                 Map<String, ClassNode> compileNodes = new HashMap<>();
 
                 for (ClassNode node : deobfuscator.getClassNodesDirectly()) {
+                    if (node == null) {
+                        continue;
+                    }
                     // Apply RAS
                     try {
-                        if (node == null) {
-                            continue;
-                        }
                         rasInfo.accept(node);
                     } catch (RASTransformFailure e) {
                         LOGGER.error("Unable to apply RAS on class {}", node.name, e);
@@ -460,7 +482,6 @@ public class ObfuscationHandler {
 
                 // Write compile-time nodes to disk
                 try (OutputStream os = Files.newOutputStream(compileAccess)) {
-                    assert os != null;
                     deobfuscator.write(os, cleanGalimJar.toPath());
                 }
 
@@ -497,15 +518,77 @@ public class ObfuscationHandler {
             throw new IllegalStateException(e);
         }
 
+        if (!this.supplementaryMappings.isEmpty()) {
+            // FIXME Find a more performance-oriented path for the long-term
+            // - as of now the only excuse we have is that supplementary mappings are an experimental feature subject to change
+            Path ctWorkJar = compileAccess;
+            Path rtWorkJar = runAccess;
+            int i = 0;
+            TinyRemapper remapper = null;
+            for (Map.Entry<@NotNull MappingFormat, @NotNull Path> supplementaryMapping : this.supplementaryMappings) {
+                VisitableMappingTree mappingTree = new MemoryMappingTree(); 
+                try {
+                    MappingReader.read(supplementaryMapping.getValue(), supplementaryMapping.getKey(), mappingTree);
+                } catch (IOException e) {
+                    throw new IllegalStateException("Unable to consume supplementary mappings file at " + supplementaryMapping, e);
+                }
+                mappingTree.reset();
+                Path ctTargetJar = ctWorkJar.resolveSibling("compile-access-jar-" + (i = (i + 1) % 2) + ".tmp");
+                try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(ctTargetJar).assumeArchive(true).build()) {
+                    remapper = TinyRemapper.newRemapper()
+                            .withMappings(new MappingIOMappingProvider(mappingTree, mappingTree.getMinNamespaceId(), mappingTree.getMaxNamespaceId() - 1))
+                            .extension(new StarplaneAnnotationRemapper())
+                            .extension(new MixinExtension())
+                            .build();
+                    remapper.readInputs(ctWorkJar);
+                    outputConsumer.addNonClassFiles(ctWorkJar);
+                    remapper.apply(outputConsumer);
+                } catch (IOException t) {
+                    throw new UncheckedIOException("Unable to apply supplementary mappings file at " + supplementaryMapping + " for compile-time access", t);
+                } finally {
+                    if (remapper != null) {
+                        remapper.finish();
+                    }
+                }
+                ctWorkJar = ctTargetJar;
+                mappingTree.reset();
+                Path rtTargetJar = ctWorkJar.resolveSibling("runtime-access-jar-" + (i = (i + 1) % 2) + ".tmp");
+                try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(rtTargetJar).assumeArchive(true).build()) {
+                    remapper = TinyRemapper.newRemapper()
+                            .withMappings(new MappingIOMappingProvider(mappingTree, mappingTree.getMinNamespaceId(), mappingTree.getMaxNamespaceId() - 1))
+                            .extension(new StarplaneAnnotationRemapper())
+                            .extension(new MixinExtension())
+                            .build();
+                    remapper.readInputs(rtWorkJar);
+                    outputConsumer.addNonClassFiles(rtWorkJar);
+                    remapper.apply(outputConsumer);
+                } catch (IOException t) {
+                    throw new UncheckedIOException("Unable to apply supplementary mappings file at " + supplementaryMapping + " for compile-time access", t);
+                } finally {
+                    if (remapper != null) {
+                        remapper.finish();
+                    }
+                }
+                rtWorkJar = rtTargetJar;
+            }
+
+            try {
+                Files.move(ctWorkJar, compileAccess, StandardCopyOption.REPLACE_EXISTING);
+                Files.move(rtWorkJar, runAccess, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Unable to apply supplementary mappings: Generic I/O error", e);
+            }
+        }
+
         return compileAccess;
     }
 
     @NotNull
     @Unmodifiable
     @Contract(pure = true)
-    private List<@NotNull String> compileSoftmap(@NotNull File softmapFile, @NotNull List<@NotNull ClassNode> obfuscatedNodes) throws IOException {
+    private List<@NotNull String> compileSoftmap(@NotNull Path softmapFile, @NotNull List<@NotNull ClassNode> obfuscatedNodes) throws IOException {
         long fileStart = System.currentTimeMillis();
-        String softmapContent = Files.readString(softmapFile.toPath(), StandardCharsets.UTF_8);
+        String softmapContent = new String(Files.readAllBytes(softmapFile), StandardCharsets.UTF_8);
         SoftmapContext softmapContext = SoftmapContext.parse(softmapContent, 0, softmapContent.length(), 1, 1);
 
         List<SoftmapParseError> parseErrors = softmapContext.getParseErrors();
@@ -572,6 +655,58 @@ public class ObfuscationHandler {
                 .extension(new MixinExtension())
                 .keepInputData(true)
                 .build();
+
+
+        if (!this.supplementaryMappings.isEmpty()) {
+            LOGGER.info("Applying supplementary mappings");
+            // FIXME Find a more performance-oriented path for the long-term
+            // - as of now the only excuse we have is that supplementary mappings are an experimental feature subject to change
+            Path workJar = jarPath;
+            int i = 0;
+            TinyRemapper remapper = null;
+            ListIterator<Map.Entry<@NotNull MappingFormat, @NotNull Path>> it = this.supplementaryMappings.listIterator(this.supplementaryMappings.size());
+            Set<Path> cleanPaths = new HashSet<>();
+            try {
+                while (it.hasPrevious()) {
+                    Map.Entry<@NotNull MappingFormat, @NotNull Path> supplementaryMapping = it.previous();
+                    VisitableMappingTree mappingTree = new MemoryMappingTree(); 
+                    try {
+                        MappingReader.read(supplementaryMapping.getValue(), supplementaryMapping.getKey(), mappingTree);
+                    } catch (IOException e) {
+                        throw new IOException("Unable to consume supplementary mappings file at " + supplementaryMapping, e);
+                    }
+                    mappingTree.reset();
+                    Path targetJar = jarPath.resolveSibling("supplementary-reobf-jar-" + (i = (i + 1) % 2) + ".tmp");
+                    cleanPaths.add(targetJar);
+                    try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(targetJar).assumeArchive(true).build()) {
+                        remapper = TinyRemapper.newRemapper()
+                                .withMappings(new MappingIOMappingProvider(mappingTree, mappingTree.getMinNamespaceId(), mappingTree.getMaxNamespaceId() - 1))
+                                .extension(new StarplaneAnnotationRemapper())
+                                .extension(new MixinExtension())
+                                .build();
+                        remapper.readInputs(workJar);
+                        remapper.apply(outputConsumer);
+                    } catch (IOException t) {
+                        throw new IOException("Unable to apply supplementary mappings file at " + supplementaryMapping + " for compile-time access", t);
+                    } finally {
+                        if (remapper != null) {
+                            remapper.finish();
+                        }
+                    }
+                    workJar = targetJar;
+                }
+
+                try {
+                    Files.move(workJar, jarPath, StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    throw new IOException("Unable to apply supplementary mappings: Generic I/O error", e);
+                }
+            } finally {
+                for (Path p : cleanPaths) {
+                    Files.deleteIfExists(p); // The move operation likely has deleted one file already
+                }
+            }
+        }
 
         Path intermediaryBuild = this.cacheDir.resolve("temporaryBuild.jar");
         try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(intermediaryBuild).build()) {

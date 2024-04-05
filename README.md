@@ -292,9 +292,9 @@ result in mods not properly loading or other classloading issues.
 
 ## Selecting the mappings
 
-At the moment only spStarmap ontop of slintermediary can be used.
-In the (far) future other variants of deobfuscation mappings (such as mmStarmap)
-may get supported.
+At the moment the spStarmap ontop of slIntermediary mappings are hardcoded,
+but it is possible to define further supplementary mappings via either softmaps
+or traditional mapping formats.
 
 ### Declaring softmaps
 
@@ -323,8 +323,34 @@ starplane {
 
 Aside from `String`, following types can be used:
  - A `Configuration`
+ - A `Path`
  - All types that can be converted to `File`
    as per [Project#file](https://docs.gradle.org/8.1/javadoc/org/gradle/api/Project.html#file-java.lang.Object-).
+
+### Declaring other supplementary mappings
+
+*Note: This is an experimental feature and is subject to change*
+
+Similar to softmap files, supplementary mappings can be defined using
+
+```groovy
+starplane {
+    mappingsFile("tinyv2", "deobf-mappings.tinyv2")
+}
+```
+
+The first argument is the format of the mappings. Ususally that would
+either be "tiny" or "tinyv2". Other mapping formats are supported,
+but are not recommended for use. The second argument is the path to the
+mapping file. Aside from `String`, following types can be used:
+ - A `Configuration`
+ - A `Path`
+ - All types that can be converted to `File`
+   as per [Project#file](https://docs.gradle.org/8.1/javadoc/org/gradle/api/Project.html#file-java.lang.Object-).
+
+For mapping formats with multiple namespaces (such as those of the tiny family),
+the source namespace is the first column where as the destination (deobfuscated)
+namespace is the last column.
 
 ## Decompilation
 
