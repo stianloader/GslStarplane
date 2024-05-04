@@ -3,19 +3,19 @@ package de.geolykt.starloader.gslstarplane;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 import org.gradle.api.Task;
 import org.gradle.api.UncheckedIOException;
@@ -31,11 +31,13 @@ import org.gradle.api.tasks.bundling.AbstractArchiveTask;
 import org.gradle.work.DisableCachingByDefault;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.ClassNode;
+import org.stianloader.remapper.MappingLookup;
+import org.stianloader.remapper.Remapper;
+import org.stianloader.remapper.SimpleMappingLookup;
 
-import net.fabricmc.tinyremapper.OutputConsumerPath;
-import net.fabricmc.tinyremapper.TinyRemapper;
-
-import de.geolykt.starloader.ras.AbstractTinyRASRemapper;
 import de.geolykt.starplane.Utils;
 import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
 
@@ -179,26 +181,34 @@ public class GslDeployModsTask extends ConventionTask {
     }
 
     private void transform(@NotNull Path source, @NotNull Path target) {
-        getLogger().info("Transforming target " + target + " from " + source);
-        // Technically TR isn't needed for that but we already have this system in place
-        TinyRemapper tinyRemapper = TinyRemapper.newRemapper()
-                .extension(new StarplaneAnnotationRemapper())
-                .keepInputData(false)
-                .build();
+        this.getLogger().info("Transforming target " + target + " from " + source);
 
-        try (OutputConsumerPath outputConsumer = new OutputConsumerPath.Builder(target).build()) {
-            tinyRemapper.readInputs(source);
-            outputConsumer.addNonClassFiles(source, tinyRemapper, Arrays.asList(new AbstractTinyRASRemapper() {
-                @Override
-                public boolean canTransform(TinyRemapper remapper, Path relativePath) {
-                    return relativePath.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ras");
+        // Apply all starplane annotations using NOP mappings.
+        // That is pretty much it (previously we used TR and also used to do something with RAS? But those should have been NOPs).
+
+        MappingLookup lookup = new SimpleMappingLookup();
+        Remapper remapper = new Remapper(lookup);
+
+        try (InputStream is = Files.newInputStream(source); ZipInputStream zIn = new ZipInputStream(is);
+                OutputStream os = Files.newOutputStream(target); ZipOutputStream zOut = new ZipOutputStream(os)) {
+            ZipEntry e;
+            while ((e = zIn.getNextEntry()) != null) {
+                if (e.getName().endsWith(".class")) {
+                    ClassReader reader = new ClassReader(zIn);
+                    ClassNode node = new ClassNode();
+                    reader.accept(node, 0);
+                    StarplaneAnnotationRemapper.apply(node, remapper, new StringBuilder());
+                    ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+                    node.accept(writer);
+                    zOut.putNextEntry(new ZipEntry(e.getName()));
+                    zOut.write(writer.toByteArray());
+                } else {
+                    zOut.putNextEntry(e);
+                    zIn.transferTo(zOut);
                 }
-            }));
-            tinyRemapper.apply(outputConsumer);
+            }
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        } finally {
-            tinyRemapper.finish();
+            throw new UncheckedIOException("Cannot transform starplane annotations in target " + target + ".", e);
         }
     }
 }

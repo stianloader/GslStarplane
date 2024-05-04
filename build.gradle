@@ -7,17 +7,13 @@ plugins {
 
 group = 'de.geolykt.starloader'
 archivesBaseName = 'gsl-starplane'
-def baseVersion = '0.1.0'
+def baseVersion = '0.2.0'
 
 targetCompatibility = compileJava.targetCompatibility = '11' // VF is Java 11+ - so we have little other choices for the time being
 sourceCompatibility = compileJava.sourceCompatibility = '1.8' // Just in case we need to go back to Java 8 in the future
 
 repositories {
     mavenLocal()
-    maven {
-        name 'fabric'
-        url 'https://maven.fabricmc.net/'
-    }
     maven {
         name 'stianloader-maven'
         url 'https://stianloader.org/maven/'
@@ -40,18 +36,19 @@ dependencies {
     // https://mvnrepository.com/artifact/org.json/json
     implementation 'org.json:json:20240303'
 
-    // https://mvnrepository.com/artifact/net.fabricmc/tiny-remapper
-    implementation 'net.fabricmc:tiny-remapper:0.10.1'
     // https://mvnrepository.com/artifact/org.vineflower/vineflower
-    implementation 'org.vineflower:vineflower:1.10.0'
+    implementation 'org.vineflower:vineflower:1.10.1'
 
     // https://mvnrepository.com/artifact/net.fabricmc/mapping-io
-    implementation 'net.fabricmc:mapping-io:0.5.1'
+    implementation 'net.fabricmc:mapping-io:0.6.1'
 
     implementation 'org.stianloader:softmap:0.1.0-a20240329'
 
     // https://mvnrepository.com/artifact/org.jetbrains/annotations
     compileOnly group: 'org.jetbrains', name: 'annotations', version: '24.1.0'
+
+    implementation 'org.stianloader:stianloader-remapper:0.1.0-a20240426'
+    implementation 'org.stianloader:micromixin-remapper:0.1.0-a20240427'
 }
 
 gradlePlugin {

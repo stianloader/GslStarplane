@@ -12,7 +12,7 @@ pushes deobfuscated jars which have a copyright on them to it.
 
 GslStarplane functions as a gradle plugin, so it first needs to be applied on a
 gradle project in order to work. Under groovy you can do it by adding
-`id 'gsl-starplane' version '0.1.0-a20240227'` to the plugins block in the `build.gradle`
+`id 'gsl-starplane' version '0.2.0-a20240504'` to the plugins block in the `build.gradle`
 file. The full plugins block will thus look something like follows:
 
 ```groovy
@@ -22,7 +22,7 @@ plugins {
     id 'maven-publish'
     // Note: When debugging self-compiled versions of gsl-starplane you should leave out
     // the automatically generated "-aYYYYMMDD" tag.
-    id 'gsl-starplane' version '0.1.0-a20240227'
+    id 'gsl-starplane' version '0.2.0-a20240504'
 }
 ```
 
@@ -41,10 +41,6 @@ pluginManagement {
             name = 'stianloader-maven'
             url = 'https://stianloader.org/maven/'
         }
-        maven {
-            name 'fabric'
-            url 'https://maven.fabricmc.net/'
-        }
     }
 }
 ```
@@ -56,11 +52,9 @@ with such a setup. So continue reading!
 
 **WARNING:** Reversible access setters are as dangerous as they are simple to
 use. Changing access of a method could make methods that normally would be
-independent of each other to override each other.
-
-Usage of AWs as an alternative is not recommended when making use of the
-starloader/stianloader toolchain. Access Wideners do make sense outside of
-our own little island though.
+independent of each other to override each other. For mutating fields,
+an accessor mixin should be used with `@Mutable`. For methods, invokers
+should be used (not yet supported in micromixin).
 
 Reversible access setters can optionally be declared in the `build.gradle`
 as follows:
@@ -105,6 +99,11 @@ configurations {
 in the project buildscript.
 
 ## The `remapJar` task
+
+**WARNING**: The 0.2.X branch uses the more experimental stianloader-remapper
+and micromixin-remapper frameworks. Unlike the tiny-remapper used by the 0.1.X
+releases they haven't been tested quite a lot and may especially be vulnerable
+to failing to remap mixins or accounting for the member inheritance hierarchy.
 
 The `remapJar` task remaps all references of deobfuscated members to use
 the obfuscated names instead. It produces the jar that can be used outside
@@ -275,7 +274,7 @@ to work. SLL can thus be declared as follows:
 ```groovy
 dependencies {
     // [...]
-    devRuntime "org.stianloader:launcher-micromixin:4.0.0-a20240227"
+    devRuntime "org.stianloader:launcher-micromixin:4.0.0-a20240413"
     // [...]
 }
 ```
