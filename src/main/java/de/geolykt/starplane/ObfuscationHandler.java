@@ -585,7 +585,7 @@ public class ObfuscationHandler {
 
         if (!this.supplementaryMappings.isEmpty()) {
             LOGGER.info("Loading supplementary mappings");
-            ListIterator<Map.Entry<@NotNull MappingFormat, @NotNull Path>> it = this.supplementaryMappings.listIterator(this.supplementaryMappings.size());
+            ListIterator<Map.Entry<@NotNull MappingFormat, @NotNull Path>> it = this.supplementaryMappings.listIterator(0);
 
             while (it.hasNext()) {
                 Map.Entry<@NotNull MappingFormat, @NotNull Path> supplementaryMapping = it.next();

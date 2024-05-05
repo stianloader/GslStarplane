@@ -130,7 +130,7 @@ remapJar {
     archiveClassifier = 'remapped'
     fromJar jar
 
-    inputs.file jar.archiveFile // Needed for gradle'S "up-to-date" checks
+    inputs.file jar.archiveFile // Needed for gradle's "up-to-date" checks
 }
 ```
 
