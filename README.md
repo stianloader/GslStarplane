@@ -129,6 +129,8 @@ The recommended configuration of the `remapJar` task is follows:
 remapJar {
     archiveClassifier = 'remapped'
     fromJar jar
+
+    inputs.file jar.archiveFile // Needed for gradle'S "up-to-date" checks
 }
 ```
 
@@ -266,8 +268,8 @@ The value is a path element which is one of the following:
 
 As of now, only SLL - regardless of mixin engine - can be used as a mod loader,
 though in theory modloaders that work as javaagents can easily be added. The version
-used depends on the contents of the devRuntime configuration classpath
-- so SLL needs to be either present on the runtime classpath or be explicitly
+used depends on the contents of the devRuntime configuration classpath - so
+SLL needs to be either present on the runtime classpath or be explicitly
 declared as being part of the devRuntime configuration in order for the dev env
 to work. SLL can thus be declared as follows:
 

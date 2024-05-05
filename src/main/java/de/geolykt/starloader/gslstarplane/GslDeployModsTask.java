@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -181,34 +182,12 @@ public class GslDeployModsTask extends ConventionTask {
     }
 
     private void transform(@NotNull Path source, @NotNull Path target) {
-        this.getLogger().info("Transforming target " + target + " from " + source);
-
-        // Apply all starplane annotations using NOP mappings.
-        // That is pretty much it (previously we used TR and also used to do something with RAS? But those should have been NOPs).
-
-        MappingLookup lookup = new SimpleMappingLookup();
-        Remapper remapper = new Remapper(lookup);
-
-        try (InputStream is = Files.newInputStream(source); ZipInputStream zIn = new ZipInputStream(is);
-                OutputStream os = Files.newOutputStream(target); ZipOutputStream zOut = new ZipOutputStream(os)) {
-            ZipEntry e;
-            while ((e = zIn.getNextEntry()) != null) {
-                if (e.getName().endsWith(".class")) {
-                    ClassReader reader = new ClassReader(zIn);
-                    ClassNode node = new ClassNode();
-                    reader.accept(node, 0);
-                    StarplaneAnnotationRemapper.apply(node, remapper, new StringBuilder());
-                    ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
-                    node.accept(writer);
-                    zOut.putNextEntry(new ZipEntry(e.getName()));
-                    zOut.write(writer.toByteArray());
-                } else {
-                    zOut.putNextEntry(e);
-                    zIn.transferTo(zOut);
-                }
-            }
+        this.getLogger().info("Copying target " + target + " from " + source);
+        // previously we used TR and also used to do something with RAS? But those should have been NOPs
+        try {
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            throw new UncheckedIOException("Cannot transform starplane annotations in target " + target + ".", e);
+            throw new UncheckedIOException(e);
         }
     }
 }
