@@ -19,7 +19,6 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,18 +44,15 @@ import org.jetbrains.annotations.Unmodifiable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.stianloader.micromixin.remapper.IllegalMixinException;
-import org.stianloader.micromixin.remapper.MemberLister;
 import org.stianloader.micromixin.remapper.MicromixinRemapper;
 import org.stianloader.micromixin.remapper.MissingFeatureException;
 import org.stianloader.remapper.HierarchyAwareMappingDelegator;
 import org.stianloader.remapper.HierarchyAwareMappingDelegator.TopLevelMemberLookup;
 import org.stianloader.remapper.MappingLookup;
-import org.stianloader.remapper.MemberRef;
 import org.stianloader.remapper.Remapper;
 import org.stianloader.remapper.SimpleHierarchyAwareMappingLookup;
 import org.stianloader.remapper.SimpleTopLevelLookup;
@@ -719,55 +715,26 @@ public class ObfuscationHandler {
 
                 List<ClassNode> allClasses = new ArrayList<>(libraryNodes.values());
                 allClasses.addAll(mainClasses);
-                @SuppressWarnings("null")
                 SimpleTopLevelLookup allTopLevelLookup = new SimpleTopLevelLookup(allClasses);
-
-                MemberLister libraryMemberLister = new MemberLister() {
-                    @Override
-                    public boolean hasMemberInHierarchy(@NotNull String clazz, @NotNull String name, @NotNull String desc) {
-                        return allTopLevelLookup.realmOf(new MemberRef(clazz, name, desc)) != null;
-                    }
-
-                    @Override
-                    public @NotNull Collection<MemberRef> tryInferMember(@NotNull String owner, @Nullable String name, @Nullable String desc) {
-                        ClassNode node = libraryNodes.get(owner);
-                        if (node == null) {
-                            return Collections.emptySet();
-                        }
-                        List<MemberRef> collected = new ArrayList<>();
-                        for (MethodNode method : node.methods) {
-                            if (name != null && !name.equals(method.name)) {
-                                continue;
-                            }
-                            if (desc != null && !desc.equals(method.desc)) {
-                                continue;
-                            }
-                            collected.add(new MemberRef(owner, method.name, method.desc));
-                        }
-                        for (FieldNode field : node.fields) {
-                            if (name != null && !name.equals(field.name)) {
-                                continue;
-                            }
-                            if (desc != null && !desc.equals(field.desc)) {
-                                continue;
-                            }
-                            collected.add(new MemberRef(owner, field.name, field.desc));
-                        }
-                        return collected;
-                    }
-                };
+                DebuggableMemberLister libraryMemberLister = new DebuggableMemberLister(allTopLevelLookup, libraryNodes);
 
                 @SuppressWarnings("null")
                 SimpleHierarchyAwareMappingLookup mixinLookup = new SimpleHierarchyAwareMappingLookup(new ArrayList<>(versionClasses.values()));
                 ReadOnlyMappingLookupSink readOnlyExternalLookups = new ReadOnlyMappingLookupSink(externalLookups);
                 MappingLookup externalHierarchyLookup = new HierarchyAwareMappingDelegator<>(readOnlyExternalLookups, allTopLevelLookup);
-                ChainMappingLookup allLookup = new ChainMappingLookup(externalHierarchyLookup, mixinLookup);
+                ChainMappingLookup allLookup = new ChainMappingLookup(mixinLookup, externalHierarchyLookup);
                 MicromixinRemapper mixinRemapper = new MicromixinRemapper(allLookup, mixinLookup, libraryMemberLister);
                 Remapper coreRemaper = new Remapper(allLookup);
 
                 StringBuilder sharedBuilder = new StringBuilder();
                 for (ClassNode mainNode : mainClasses) {
                     mainNode = Objects.requireNonNull(mainNode);
+
+//                    if (mainNode.name.equals("de/geolykt/fastgalgen/mixins/QuadTreeMixins")) {
+//                        allLookup.enableDebugMode(true);
+//                        externalLookups.enableDebugMode(true);
+//                        libraryMemberLister.setDebugging(true);
+//                    }
 
                     StarplaneAnnotationRemapper.apply(mainNode, coreRemaper, sharedBuilder);
                     try {
@@ -776,14 +743,12 @@ public class ObfuscationHandler {
                         throw new IOException("Unable to remap due to a problem which occured while remapping mixin " + mainNode.name + " in multi-release-jar sourceset " + mrjVersion, e);
                     }
 
-//                    if (mainNode.name.equals("de/geolykt/starloader/apimixins/ApplicationMixins")) {
-//                        allLookup.enableDebugMode(true);
-//                        externalLookups.enableDebugMode(true);
-//                    }
                     coreRemaper.remapNode(mainNode, sharedBuilder);
-//                    if (mainNode.name.equals("de/geolykt/starloader/apimixins/ApplicationMixins")) {
+
+//                    if (mainNode.name.equals("de/geolykt/fastgalgen/mixins/QuadTreeMixins")) {
 //                        allLookup.enableDebugMode(false);
 //                        externalLookups.enableDebugMode(false);
+//                        libraryMemberLister.setDebugging(false);
 //                    }
 
                     ClassWriter writer = new ClassWriter(0);
