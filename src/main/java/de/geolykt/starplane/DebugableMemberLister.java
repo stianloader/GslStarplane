@@ -15,14 +15,14 @@ import org.stianloader.micromixin.remapper.MemberLister;
 import org.stianloader.remapper.MemberRef;
 import org.stianloader.remapper.SimpleTopLevelLookup;
 
-public class DebuggableMemberLister implements MemberLister {
+public class DebugableMemberLister implements MemberLister {
     private boolean debugging = false;
     @NotNull
     private final Map<String, ClassNode> libraryNodes;
     @NotNull
     private final SimpleTopLevelLookup topTevelLookup;
 
-    public DebuggableMemberLister(@NotNull SimpleTopLevelLookup topLevelLookup, @NotNull Map<String, ClassNode> libraryNodes) {
+    public DebugableMemberLister(@NotNull SimpleTopLevelLookup topLevelLookup, @NotNull Map<String, ClassNode> libraryNodes) {
         this.topTevelLookup = topLevelLookup;
         this.libraryNodes = libraryNodes;
     }

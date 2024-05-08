@@ -438,11 +438,10 @@ public class ObfuscationHandler {
                 // Compile-time Access = Runtime Access
                 Files.copy(compileAccess, runAccess, StandardCopyOption.REPLACE_EXISTING);
 
-                try (BufferedWriter bw = Files.newBufferedWriter(awHash, StandardCharsets.UTF_8)) {
-                    bw.write("null-");
-                    bw.write(getStarplaneChecksum());
+                try {
+                    Files.writeString(awHash, currentHash, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LOGGER.warn("Cannot write aw hash; caching may not work correctly", e);
                 }
             } else {
                 // Duplicate all nodes
@@ -466,10 +465,10 @@ public class ObfuscationHandler {
                     compileNodes.put(node.name, node);
                 }
 
-                try (BufferedWriter bw = Files.newBufferedWriter(awHash, StandardCharsets.UTF_8)) {
-                    bw.write(currentHash);
+                try {
+                    Files.writeString(awHash, currentHash, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LOGGER.warn("Cannot write aw hash; caching may not work correctly", e);
                 }
 
                 // Write compile-time nodes to disk
@@ -716,7 +715,7 @@ public class ObfuscationHandler {
                 List<ClassNode> allClasses = new ArrayList<>(libraryNodes.values());
                 allClasses.addAll(mainClasses);
                 SimpleTopLevelLookup allTopLevelLookup = new SimpleTopLevelLookup(allClasses);
-                DebuggableMemberLister libraryMemberLister = new DebuggableMemberLister(allTopLevelLookup, libraryNodes);
+                DebugableMemberLister libraryMemberLister = new DebugableMemberLister(allTopLevelLookup, libraryNodes);
 
                 @SuppressWarnings("null")
                 SimpleHierarchyAwareMappingLookup mixinLookup = new SimpleHierarchyAwareMappingLookup(new ArrayList<>(versionClasses.values()));
