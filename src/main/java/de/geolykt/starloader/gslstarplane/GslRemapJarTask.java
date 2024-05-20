@@ -1,6 +1,7 @@
 package de.geolykt.starloader.gslstarplane;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
@@ -46,8 +47,7 @@ public class GslRemapJarTask extends Jar {
             }
             ObfuscationHandler oHandler = GslStarplanePlugin.OBF_HANDLERS.get(super.getProject());
             if (oHandler == null) {
-                LOGGER.error("Obfuscation handler not set for this project: " + super.getProject().getName());
-                return WorkResults.didWork(false);
+                throw new IllegalStateException("Obfuscation handler not set for this project: " + super.getProject().getName());
             }
 
             Set<@NotNull Path> includes = new HashSet<>();
@@ -67,8 +67,7 @@ public class GslRemapJarTask extends Jar {
                 oHandler.reobfuscateJar(super.getArchiveFile().get().getAsFile().toPath(), oHandler.getTransformedGalimulatorJar(), includes);
                 LOGGER.info("Remap complete");
             } catch (IOException e) {
-                LOGGER.error("Unable to remap", e);
-                return WorkResults.didWork(false);
+                throw new UncheckedIOException("Unable to remap", e);
             }
 
             return WorkResults.didWork(true);
