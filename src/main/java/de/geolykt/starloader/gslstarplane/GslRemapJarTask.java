@@ -32,6 +32,7 @@ public class GslRemapJarTask extends Jar {
                 super.dependsOn(notation);
             }
             this.fromJars.add(notation);
+            this.getInputs().files(notation);
         }
     }
 
