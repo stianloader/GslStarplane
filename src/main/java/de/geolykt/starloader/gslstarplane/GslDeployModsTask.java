@@ -3,7 +3,6 @@ package de.geolykt.starloader.gslstarplane;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,7 +15,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
 
 import org.gradle.api.Task;
 import org.gradle.api.UncheckedIOException;
@@ -32,15 +30,8 @@ import org.gradle.api.tasks.bundling.AbstractArchiveTask;
 import org.gradle.work.DisableCachingByDefault;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.tree.ClassNode;
-import org.stianloader.remapper.MappingLookup;
-import org.stianloader.remapper.Remapper;
-import org.stianloader.remapper.SimpleMappingLookup;
 
 import de.geolykt.starplane.Utils;
-import de.geolykt.starplane.remapping.StarplaneAnnotationRemapper;
 
 @DisableCachingByDefault(because = "Not worth it")
 public class GslDeployModsTask extends ConventionTask {

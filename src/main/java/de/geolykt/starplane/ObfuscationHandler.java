@@ -3,7 +3,6 @@ package de.geolykt.starplane;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -200,6 +199,49 @@ public class ObfuscationHandler {
     }
 
     @NotNull
+    public Path getOriginalGalimulatorJar() {
+        File cleanGalimJar = new File(this.projectDir.toFile(), "galimulator-desktop.jar");
+
+        found:
+        if (!cleanGalimJar.exists()) {
+            LOGGER.debug("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
+            cleanGalimJar = new File(this.cacheDir.toFile(), "galimulator-desktop.jar");
+            if (cleanGalimJar.exists()) {
+                break found;
+            }
+
+            LOGGER.debug("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
+            String propertyPath = System.getProperty("de.geolykt.starplane.galimulator-jar");
+
+            if (propertyPath != null) {
+                cleanGalimJar = this.projectDir.resolve(propertyPath).toFile();
+                if (cleanGalimJar.exists()) {
+                    break found;
+                }
+                LOGGER.warn("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
+            } else {
+                LOGGER.debug("System property 'de.geolykt.starplane.galimulator-jar' not defined.");
+            }
+
+            // obtain galimulator jar
+            File galimDir = Utils.getGameDir("Galimulator");
+
+            if (galimDir != null && galimDir.exists()) {
+                cleanGalimJar = new File(galimDir, "jar/galimulator-desktop.jar");
+                if (cleanGalimJar.exists()) {
+                    break found;
+                }
+                LOGGER.error("Unable to resolve galimulator jar file (was able to resolve the potential directory though)!");
+            } else {
+                LOGGER.error("Unable to resolve galimulator directory!");
+            }
+
+            throw new IllegalStateException("Cannot resolve dependencies");
+        }
+        return cleanGalimJar.toPath();
+    }
+
+    @NotNull
     public Path getTransformedGalimulatorJar() {
         if (!Files.isDirectory(this.cacheDir)) {
             try {
@@ -261,52 +303,14 @@ public class ObfuscationHandler {
         this.didRefresh = true;
 
         // Now, somehow obtain the galim jar
-        File cleanGalimJar = new File(this.projectDir.toFile(), "galimulator-desktop.jar");
-
-        found:
-        if (!cleanGalimJar.exists()) {
-            LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
-            cleanGalimJar = new File(this.cacheDir.toFile(), "galimulator-desktop.jar");
-            if (cleanGalimJar.exists()) {
-                break found;
-            }
-
-            LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
-            String propertyPath = System.getProperty("de.geolykt.starplane.galimulator-jar");
-
-            if (propertyPath != null) {
-                cleanGalimJar = this.projectDir.resolve(propertyPath).toFile();
-                if (cleanGalimJar.exists()) {
-                    break found;
-                }
-                LOGGER.info("Galimulator jar at " + cleanGalimJar.getAbsolutePath() + " not found.");
-            } else {
-                LOGGER.info("System property 'de.geolykt.starplane.galimulator-jar' not defined.");
-            }
-
-            // obtain galimulator jar
-            File galimDir = Utils.getGameDir("Galimulator");
-
-            if (galimDir != null && galimDir.exists()) {
-                cleanGalimJar = new File(galimDir, "jar/galimulator-desktop.jar");
-                if (cleanGalimJar.exists()) {
-                    break found;
-                }
-                LOGGER.error("Unable to resolve galimulator jar file (was able to resolve the potential directory though)!");
-            } else {
-                LOGGER.error("Unable to resolve galimulator directory!");
-            }
-
-            throw new IllegalStateException("Cannot resolve dependencies");
-        }
-
-        LOGGER.info("Using the base galimulator jar found at " + cleanGalimJar.getAbsolutePath());
+        Path cleanGalimJar = this.getOriginalGalimulatorJar();
+        LOGGER.info("Using the base galimulator jar found at " + cleanGalimJar.toAbsolutePath());
 
         Path map = this.cacheDir.resolve(ObfuscationHandler.INTERMEDIARY_FILE_NAME);
         Oaktree deobfuscator = new Oaktree();
         try {
             long start = System.currentTimeMillis();
-            JarFile jar = new JarFile(cleanGalimJar);
+            JarFile jar = new JarFile(cleanGalimJar.toFile());
             deobfuscator.index(jar);
             jar.close();
             Map<String, ClassNode> nameToNode = new HashMap<>();
@@ -432,7 +436,7 @@ public class ObfuscationHandler {
 
             if (rasInfo == null) {
                 try (OutputStream os = Files.newOutputStream(compileAccess)) {
-                    deobfuscator.write(os, cleanGalimJar.toPath());
+                    deobfuscator.write(os, cleanGalimJar);
                 }
                 // Compile-time Access = Runtime Access
                 Files.copy(compileAccess, runAccess, StandardCopyOption.REPLACE_EXISTING);
@@ -472,13 +476,14 @@ public class ObfuscationHandler {
 
                 // Write compile-time nodes to disk
                 try (OutputStream os = Files.newOutputStream(compileAccess)) {
-                    deobfuscator.write(os, cleanGalimJar.toPath());
+                    deobfuscator.write(os, cleanGalimJar);
                 }
 
                 // Write runtime nodes to disk
                 try (ZipOutputStream os = new ZipOutputStream(Files.newOutputStream(runAccess), StandardCharsets.UTF_8)) {
                     // Copy resources
-                    try (ZipInputStream zipIn = new ZipInputStream(new FileInputStream(cleanGalimJar))) {
+                    try (InputStream rawIn = Files.newInputStream(cleanGalimJar);
+                            ZipInputStream zipIn = new ZipInputStream(rawIn)) {
                         for (ZipEntry entry = zipIn.getNextEntry(); entry != null; entry = zipIn.getNextEntry()) {
                             if (entry.getName().endsWith(".class")) {
                                 // Do not copy classes
