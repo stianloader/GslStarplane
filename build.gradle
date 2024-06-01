@@ -47,7 +47,7 @@ dependencies {
     // https://mvnrepository.com/artifact/org.jetbrains/annotations
     compileOnly group: 'org.jetbrains', name: 'annotations', version: '24.1.0'
 
-    implementation 'org.stianloader:stianloader-remapper:0.1.0-a20240426'
+    implementation 'org.stianloader:stianloader-remapper:0.1.0-a20240601'
     implementation 'org.stianloader:micromixin-remapper:0.1.0-a20240520'
 }
 

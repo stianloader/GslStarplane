@@ -403,6 +403,64 @@ eclipse {
 }
 ```
 
+## Checking for mapping tears
+
+When creating APIs that must be stable across both the development environment
+as well as within production it is an attractive API design to hide implementations
+behind an interface. However, doing so has the acute problem that the remapper
+might be tempted to incorrectly remap the implementation method while keeping
+the interface definition untouched: A mapping tear appears.
+This effect is mostly caused by implementing a method within an interface
+while simultaneously overriding a method from galimulator with the same descriptor
+and name.
+
+**Note:** At this point in time, gslStarplane will not verify for mapping tears
+in mixins. Be aware with them. That being said, micromixin-remapper will do it's
+best to fail if an obvious mapping tear is detected.
+
+The solution for this problem is one of the diagnostic nature, as avoiding
+or fixing it outright is not possible without significantly tampering with
+the class files. For this, gslStarplane provides the `GslVerifyRemapperJarTask`,
+which verifies the produced jar for possible programmer blunders (at this point
+only mapping tears).
+
+**Note:** `GslVerifyRemapperJarTask` will not fail compilation if it detects
+a fault. Instead, it will plainly just report the fault to the log as an error
+(though gradle will not handle it differently by default).
+
+To use the task, it first needs to be declared as follows (gslStarplane
+does not preconfigure the task, meaning that all instances of the task need
+to be defined within the buildscript):
+
+```groovy
+task jarVerification(type: de.geolykt.starloader.gslstarplane.GslVerifyRemapperJarTask, dependsOn: remapJar) {
+    includingGalimulatorJar = true
+    validationJar = remapJar.archiveFile
+}
+
+check {
+    dependsOn jarVerification
+}
+```
+
+The `check` block can be omitted if it is needed and is only included here
+to make the task be run whenever the `check` task is executed (`build` also
+executes `check` by default).
+
+The `GslVerifyRemapperJarTask` task defines three properties:
+- `validationJar` (required): This defines the input jar which should be
+  validated.
+- `classpath` (optional): The runtime classpath used for validation.
+- `includingGalimulatorJar` (optional, default `true`): Whether the
+  **original** (i.e. fat and obfuscated) galimulator jar should be added
+  to the validation classpath.
+
+Note that the validation classpath can be plainly left empty and is
+generally the recommended approach for performance reasons as long as
+`includingGalimulatorJar` is set to `true`. However, with an empty
+classpath the task might not always be aware of all abstract methods
+and thus may not be able to detect certain mapping tears.
+
 ## Roadmap
 
 Currently it is planned (or rather said, dreamed of) to offer Starplane as
