@@ -1,5 +1,6 @@
 package de.geolykt.starplane.remapping;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.TypeReference;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -17,12 +19,15 @@ import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeAnnotationNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.stianloader.remapper.MemberRef;
 import org.stianloader.remapper.Remapper;
 
 public class StarplaneAnnotationRemapper {
+    @NotNull
+    private static final String INLINED_REFERENCE_SOURCE_MARKER_ANNOTATION = "Lorg/stianloader/starplane/annotations/InlinedReferenceSourceMarker;";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StarplaneAnnotationRemapper.class);
 
@@ -70,11 +75,11 @@ public class StarplaneAnnotationRemapper {
                 } else if (annotation.desc.equals("Lde/geolykt/starloader/starplane/annotations/RemapClassReference;")) {
                     it.remove();
                     if (annotation.values == null || annotation.values.size() == 0) {
-                        LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapClassReference, but neither the 'name' nor the 'type' value of the annotation is set.", node.name, field.name, field.desc);
+                        StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapClassReference, but neither the 'name' nor the 'type' value of the annotation is set.", node.name, field.name, field.desc);
                         break;
                     }
                     if (annotation.values.size() == 4) {
-                        LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapClassReference, but both the 'name' and the 'type' value of the annotation is set. Consider only setting one of these values.", node.name, field.name, field.desc);
+                        StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapClassReference, but both the 'name' and the 'type' value of the annotation is set. Consider only setting one of these values.", node.name, field.name, field.desc);
                         break;
                     }
                     String typeName;
@@ -83,18 +88,18 @@ public class StarplaneAnnotationRemapper {
                     } else if (annotation.values.get(0).equals("type")) {
                         typeName = ((Type) annotation.values.get(1)).getInternalName();
                     } else {
-                        LOGGER.error("Erroneous annotation value: " + annotation.values.get(0) + " for RemapClassReference. Are you depending on the wrong starplane-annotations version?");
+                        StarplaneAnnotationRemapper.LOGGER.error("Erroneous annotation value: " + annotation.values.get(0) + " for RemapClassReference. Are you depending on the wrong starplane-annotations version?");
                         break;
                     }
                     classMapRequests.put(new MemberRef(node.name, field.name, field.desc), typeName);
                 } else if (annotation.desc.equals("Lde/geolykt/starloader/starplane/annotations/RemapMemberReference;")) {
                     it.remove();
                     if (annotation.values == null) {
-                        LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but does not define any of the required values.", node.name, field.name, field.desc);
+                        StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but does not define any of the required values.", node.name, field.name, field.desc);
                         break;
                     }
                     if (annotation.values.size() >= 10) {
-                        LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but more than the required values of the annotation is set. Consider removing duplicates.", node.name, field.name, field.desc);
+                        StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but more than the required values of the annotation is set. Consider removing duplicates.", node.name, field.name, field.desc);
                         break;
                     }
                     String typeName = null;
@@ -111,13 +116,13 @@ public class StarplaneAnnotationRemapper {
                             memberName = (String) annotation.values.get(i + 1);
                         } else if (valueName.equals("desc")) {
                             if (memberDesc != null) {
-                                LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", node.name, field.name, field.desc);
+                                StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", node.name, field.name, field.desc);
                                 break;
                             }
                             memberDesc = (String) annotation.values.get(i + 1);
                         } else if (valueName.equals("descType")) {
                             if (memberDesc != null) {
-                                LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", node.name, field.name, field.desc);
+                                StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", node.name, field.name, field.desc);
                                 break;
                             }
                             memberDesc = ((Type) annotation.values.get(i + 1)).getDescriptor();
@@ -142,19 +147,19 @@ public class StarplaneAnnotationRemapper {
                                 argDesc += arg.getDescriptor();
                             }
                             if (memberDesc != null) {
-                                LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", node.name, field.name, field.desc);
+                                StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", node.name, field.name, field.desc);
                                 break;
                             }
                             memberDesc = "(" + argDesc + ")" + ((Type) methodDesc.values.get(ret)).getDescriptor();
                         } else if (valueName.equals("format")) {
                             format = ((String[]) annotation.values.get(i + 1))[1];
                         } else {
-                            LOGGER.error("Erroneous annotation value: {} for RemapMemberReference. Are you depending on the wrong starplane-annotations version?", valueName);
+                            StarplaneAnnotationRemapper.LOGGER.error("Erroneous annotation value: {} for RemapMemberReference. Are you depending on the wrong starplane-annotations version?", valueName);
                             break;
                         }
                     }
                     if (typeName == null) {
-                        LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but neither the 'owner' nor the 'ownerType' value of the annotation is set. Consider setting one of these values.", node.name, field.name, field.desc);
+                        StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but neither the 'owner' nor the 'ownerType' value of the annotation is set. Consider setting one of these values.", node.name, field.name, field.desc);
                         break;
                     }
                     MemberRef targetTriple = new MemberRef(typeName, Objects.requireNonNull(memberName, "memberName == null"), Objects.requireNonNull(memberDesc, "memberDesc == null"));
@@ -167,26 +172,42 @@ public class StarplaneAnnotationRemapper {
 
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-                if (insn.getOpcode() != Opcodes.INVOKESTATIC) {
+                if (insn.getOpcode() == Opcodes.INVOKESTATIC) {
+                    MethodInsnNode minsn = (MethodInsnNode) insn;
+                    if (!minsn.owner.equals("de/geolykt/starloader/starplane/annotations/ReferenceSource")) {
+                        continue;
+                    }
+                    if (!minsn.name.equals("getStringValue") || !minsn.desc.equals("()Ljava/lang/String;")) {
+                        continue;
+                    }
+                } else if (insn.getOpcode() == Opcodes.LDC) {
+                    List<TypeAnnotationNode> insnAnnots = insn.invisibleTypeAnnotations;
+                    if (insnAnnots == null || insnAnnots.isEmpty()) {
+                        continue;
+                    }
+
+                    insnSkipBlock: {
+                        for (TypeAnnotationNode insnAnnot : insnAnnots) {
+                            if (insnAnnot.desc.equals(StarplaneAnnotationRemapper.INLINED_REFERENCE_SOURCE_MARKER_ANNOTATION)) {
+                                break insnSkipBlock;
+                            }
+                        }
+                        continue;
+                    }
+                } else {
                     continue;
                 }
-                MethodInsnNode minsn = (MethodInsnNode) insn;
-                if (!minsn.owner.equals("de/geolykt/starloader/starplane/annotations/ReferenceSource")) {
-                    continue;
-                }
-                if (!minsn.name.equals("getStringValue") || !minsn.desc.equals("()Ljava/lang/String;")) {
-                    continue;
-                }
+
                 AbstractInsnNode nextInsn = insn.getNext();
                 while (nextInsn != null && (nextInsn.getOpcode() == -1 || nextInsn.getOpcode() == Opcodes.ALOAD)) {
                     nextInsn = nextInsn.getNext();
                 }
                 if (nextInsn == null) {
-                    LOGGER.error("Method {}.{} {} contains a rouge ReferenceSource.getStringValue() call.", node.name, method.name, method.desc);
+                    StarplaneAnnotationRemapper.LOGGER.error("Method {}.{} {} contains a rouge ReferenceSource.getStringValue() call.", node.name, method.name, method.desc);
                     break;
                 }
                 if (nextInsn.getOpcode() != Opcodes.PUTSTATIC && nextInsn.getOpcode() != Opcodes.PUTFIELD) {
-                    LOGGER.error("Method {}.{} {} contains a call to ReferenceSource.getStringValue() that is not immediately assigned to a field.", node.name, method.name, method.desc);
+                    StarplaneAnnotationRemapper.LOGGER.error("Method {}.{} {} contains a call to ReferenceSource.getStringValue() that is not immediately assigned to a field.", node.name, method.name, method.desc);
                     continue;
                 }
                 MemberRef assignmentTriple = new MemberRef(((FieldInsnNode) nextInsn).owner, ((FieldInsnNode) nextInsn).name, ((FieldInsnNode) nextInsn).desc);
@@ -198,7 +219,7 @@ public class StarplaneAnnotationRemapper {
                     MemberRef member = memberMapRequests.get(assignmentTriple);
                     String format = memberMapFormat.get(assignmentTriple);
                     if (member == null || format == null) {
-                        LOGGER.error("Method {}.{} {} contains a call to ReferenceSource.getStringValue() that is assigned to {}.{} {} which is not annotated with a starplane remapping annotation. (Note: this feature does not work across classes!)", node.name, method.name, method.desc, assignmentTriple.getOwner(), assignmentTriple.getName(), assignmentTriple.getDesc());
+                        StarplaneAnnotationRemapper.LOGGER.error("Method {}.{} {} contains a call to ReferenceSource.getStringValue() that is assigned to {}.{} {} which is not annotated with a starplane remapping annotation. (Note: this feature does not work across classes!)", node.name, method.name, method.desc, assignmentTriple.getOwner(), assignmentTriple.getName(), assignmentTriple.getDesc());
                         continue;
                     }
                     String remappedOwner = Remapper.remapInternalName(remapper.getLookup(), member.getOwner(), sharedBuilder);
@@ -229,11 +250,15 @@ public class StarplaneAnnotationRemapper {
                             replacementLdc = remappedOwner + "." + remappedName + " " + remappedDesc;
                         }
                     } else {
-                        LOGGER.error("Method {}.{} {} contains a call to ReferenceSource.getStringValue() that is assigned to {}.{} {} which uses an unsupported format. (Are you using the right version of starplane-annotations?)", node.name, method.name, method.desc, assignmentTriple.getOwner(), assignmentTriple.getName(), assignmentTriple.getDesc());
+                        StarplaneAnnotationRemapper.LOGGER.error("Method {}.{} {} contains a call to ReferenceSource.getStringValue() that is assigned to {}.{} {} which uses an unsupported format. (Are you using the right version of starplane-annotations?)", node.name, method.name, method.desc, assignmentTriple.getOwner(), assignmentTriple.getName(), assignmentTriple.getDesc());
                         continue;
                     }
                 }
-                method.instructions.set(insn, new LdcInsnNode(replacementLdc));
+
+                LdcInsnNode newInsn = new LdcInsnNode(replacementLdc);
+                newInsn.invisibleTypeAnnotations = new ArrayList<>();
+                newInsn.invisibleTypeAnnotations.add(new TypeAnnotationNode(TypeReference.CAST << 24, null, StarplaneAnnotationRemapper.INLINED_REFERENCE_SOURCE_MARKER_ANNOTATION));
+                method.instructions.set(insn, newInsn);
                 insn = nextInsn;
             }
         }

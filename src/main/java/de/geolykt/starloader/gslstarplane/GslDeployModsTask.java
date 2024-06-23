@@ -6,7 +6,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -173,12 +172,10 @@ public class GslDeployModsTask extends ConventionTask {
     }
 
     private void transform(@NotNull Path source, @NotNull Path target) {
-        this.getLogger().info("Copying target " + target + " from " + source);
-        // previously we used TR and also used to do something with RAS? But those should have been NOPs
         try {
-            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+            GslStarplanePlugin.OBF_HANDLERS.get(this.getProject()).deobfuscateJar(source, target);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new UncheckedIOException("Unable to copy target " + target + " from " + source, e);
         }
     }
 }

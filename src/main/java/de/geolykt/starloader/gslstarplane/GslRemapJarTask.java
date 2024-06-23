@@ -65,7 +65,7 @@ public class GslRemapJarTask extends Jar {
 
             try {
                 LOGGER.info("Remapping");
-                oHandler.reobfuscateJar(super.getArchiveFile().get().getAsFile().toPath(), oHandler.getTransformedGalimulatorJar(), includes);
+                oHandler.reobfuscateJar(super.getArchiveFile().get().getAsFile().toPath(), includes);
                 LOGGER.info("Remap complete");
             } catch (IOException e) {
                 throw new UncheckedIOException("Unable to remap", e);

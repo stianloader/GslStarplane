@@ -162,6 +162,245 @@ public class ObfuscationHandler {
         }
     }
 
+    @NotNull
+    @Unmodifiable
+    @Contract(pure = true)
+    private List<@NotNull String> compileSoftmap(@NotNull Path softmapFile, @NotNull List<@NotNull ClassNode> obfuscatedNodes) throws IOException {
+        long fileStart = System.currentTimeMillis();
+        String softmapContent = new String(Files.readAllBytes(softmapFile), StandardCharsets.UTF_8);
+        SoftmapContext softmapContext = SoftmapContext.parse(softmapContent, 0, softmapContent.length(), 1, 1);
+
+        List<SoftmapParseError> parseErrors = softmapContext.getParseErrors();
+        if (!parseErrors.isEmpty()) {
+            System.out.println();
+            for (SoftmapParseError error : parseErrors) {
+                String contentSplice;
+                if (error.endCodepoint - error.startCodepoint < 100) {
+                    contentSplice = softmapContent.substring(error.startCodepoint, error.endCodepoint);
+                } else {
+                    contentSplice = softmapContent.substring(error.startCodepoint, error.startCodepoint + 80);
+                    contentSplice = contentSplice + "... (and " + (error.endCodepoint - error.startCodepoint - 80) + " further characters)";
+                }
+                ObfuscationHandler.LOGGER.error("Syntax error in softmap file {} (row {}, column {}): {}", softmapFile, error.row, error.column, error.getDescription());
+                ObfuscationHandler.LOGGER.error("Invalid token: {}", contentSplice);
+            }
+            System.out.println();
+        }
+
+        @SuppressWarnings("null")
+        ApplicationResult result = softmapContext.tryApply(obfuscatedNodes);
+
+        List<SoftmapApplicationError> applyErrors = result.getErrors();
+        if (!applyErrors.isEmpty()) {
+            System.out.println();
+            for (SoftmapApplicationError error : applyErrors) {
+                String contentSplice;
+                Token errorLoc = error.getErrorLocation();
+                if (errorLoc.getStart() - errorLoc.getEnd() < 100) {
+                    contentSplice = softmapContent.substring(errorLoc.getStart(), errorLoc.getEnd());
+                } else {
+                    contentSplice = softmapContent.substring(errorLoc.getStart(), errorLoc.getStart() + 80);
+                    contentSplice = contentSplice + "... (and " + (errorLoc.getEnd() - errorLoc.getStart() - 80) + " further characters)";
+                }
+                ObfuscationHandler.LOGGER.error("Application error in softmap file {} (row {}, column {}): {}.", softmapFile, errorLoc.getRow(), errorLoc.getColumn(), error.getDescription());
+                ObfuscationHandler.LOGGER.error("Invalid token: {}", contentSplice);
+            }
+            System.out.println();
+        }
+
+        ObfuscationHandler.LOGGER.info("Softmap file {} compiled in {}ms.", softmapFile, (System.currentTimeMillis() - fileStart));
+        return result.getGeneratedTinyV1Mappings();
+    }
+
+    public void deobfuscateJar(@NotNull Path source, @NotNull Path target) throws IOException {
+        Path spstarmap = this.cacheDir.resolve(ObfuscationHandler.STARMAP_FILE_NAME);
+        Path slintermediary = this.cacheDir.resolve(ObfuscationHandler.INTERMEDIARY_FILE_NAME);
+        Path compiledSoftmap = this.cacheDir.resolve(ObfuscationHandler.COMPILED_SOFTMAP_FILE_NAME);
+
+        List<@NotNull MappingLookup> lookups = new ArrayList<>();
+        lookups.add(new StarplaneMappingLookup(compiledSoftmap, true, true).load());
+        lookups.add(new StarplaneMappingLookup(spstarmap, true).load());
+        lookups.add(new StarplaneMappingLookup(slintermediary, true).load());
+
+        if (!this.supplementaryMappings.isEmpty()) {
+            LOGGER.info("Loading supplementary mappings");
+            ListIterator<Map.Entry<@NotNull MappingFormat, @NotNull Path>> it = this.supplementaryMappings.listIterator(0);
+
+            while (it.hasNext()) {
+                Map.Entry<@NotNull MappingFormat, @NotNull Path> supplementaryMapping = it.next();
+                VisitableMappingTree mappingTree = new MemoryMappingTree(); 
+                try {
+                    MappingReader.read(supplementaryMapping.getValue(), supplementaryMapping.getKey(), mappingTree);
+                } catch (IOException e) {
+                    throw new IOException("Unable to consume supplementary mappings file at " + supplementaryMapping, e);
+                }
+                mappingTree.reset();
+                lookups.add(0, new ReadOnlyMIOMappingLookup(mappingTree, mappingTree.getMaxNamespaceId() - 1, mappingTree.getMinNamespaceId()));
+            }
+        }
+
+        Map<String, ClassNode> remapNodes = new HashMap<>();
+        Map<String, byte[]> rawFiles = new HashMap<>();
+
+        try (InputStream is = Files.newInputStream(source); ZipInputStream zipIn = new ZipInputStream(is, StandardCharsets.UTF_8)) {
+            ZipEntry e;
+            while ((e = zipIn.getNextEntry()) != null) {
+                byte[] allData = zipIn.readAllBytes();
+                if (allData.length < 4
+                        || allData[0] != (byte) 0xCA
+                        || allData[1] != (byte) 0xFE
+                        || allData[2] != (byte) 0xBA
+                        || allData[3] != (byte) 0xBE
+                        || !e.getName().endsWith(".class")) {
+                    if (rawFiles.put(e.getName(), allData) != null) {
+                        ObfuscationHandler.LOGGER.warn("Overwrote entry for raw file {}. The remapped jar may be malformed", e.getName());
+                    }
+                    continue;
+                }
+                try {
+                    ClassReader reader = new ClassReader(allData);
+                    ClassNode visitedNode = new ClassNode();
+                    reader.accept(visitedNode, 0); // Do not skip anything (we will write the nodes as-is, including frames!)
+                    remapNodes.put(e.getName(), visitedNode);
+                } catch (Exception ex) {
+                    ObfuscationHandler.LOGGER.warn("Unable to read classfile {}; treating it as a regular file instead.", e.getName(), ex);
+                    if (rawFiles.put(e.getName(), allData) != null) {
+                        ObfuscationHandler.LOGGER.warn("Overwrote entry for raw file {}. The remapped jar may be malformed", e.getName());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new IOException("Unable to read input jar " + source, e);
+        }
+
+        Map<String, ClassNode> libraryNodes = new HashMap<>();
+        try (InputStream is = Files.newInputStream(this.getTransformedGalimulatorJar());
+                ZipInputStream zipIn = new ZipInputStream(is, StandardCharsets.UTF_8)) {
+            ZipEntry e;
+            while ((e = zipIn.getNextEntry()) != null) {
+                byte[] allData = zipIn.readAllBytes();
+                if (allData.length < 4
+                        || allData[0] != (byte) 0xCA
+                        || allData[1] != (byte) 0xFE
+                        || allData[2] != (byte) 0xBA
+                        || allData[3] != (byte) 0xBE
+                        || !e.getName().endsWith(".class")) {
+                    continue;
+                }
+                try {
+                    ClassReader reader = new ClassReader(allData);
+                    ClassNode visitedNode = new ClassNode();
+                    reader.accept(visitedNode, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+                    if (libraryNodes.put(visitedNode.name, visitedNode) != null) {
+                        ObfuscationHandler.LOGGER.warn("Collision for path {}, entry {}. Likely caused due to unexpected multi-release-jar", visitedNode.name, e.getName());
+                    }
+                } catch (Exception ex) {
+                    ObfuscationHandler.LOGGER.warn("Unable to read library classfile {}; skipping it instead.", e.getName(), ex);
+                }
+            }
+        }
+
+        // multi-release jar version -> map of class name to ClassNode pairs.
+        Map<Integer, Map<String, ClassNode>> mrjClasses = new HashMap<>();
+        int maxMrjVersion = 8;
+
+        for (Map.Entry<String, ClassNode> entry : remapNodes.entrySet()) {
+            String path = entry.getKey();
+            ClassNode node = entry.getValue();
+            String fullpath = path;
+            while (path.startsWith("/")) {
+                path = path.substring(1);
+            }
+            int mrjVersion = 8;
+            if (path.startsWith("META-INF/versions/")) {
+                path = path.substring(18);
+                mrjVersion = Integer.parseInt(path.substring(0, path.indexOf('/')));
+                if (mrjVersion < 9) {
+                    ObfuscationHandler.LOGGER.warn("Class {} of path {} would fit under the multi-release jar version of {} - which makes little sense as that would be before the introduction of multi-release jars.", node.name, fullpath, mrjVersion);
+                    mrjVersion = 8;
+                }
+            }
+
+            if (mrjVersion > maxMrjVersion) {
+                maxMrjVersion = mrjVersion;
+            }
+
+            mrjClasses.computeIfAbsent(mrjVersion, (ignored) -> {
+                return new HashMap<>();
+            }).put(node.name, node);
+        };
+
+        try (OutputStream os = Files.newOutputStream(target);
+                ZipOutputStream zipOut = new ZipOutputStream(os, StandardCharsets.UTF_8)) {
+            @SuppressWarnings("null")
+            ChainMappingLookup externalLookups = new ChainMappingLookup(lookups.toArray(new @NotNull MappingLookup[0]));
+            for (int mrjVersion = maxMrjVersion; mrjVersion >= 8; mrjVersion--) {
+                Map<String, ClassNode> versionClasses = mrjClasses.remove(mrjVersion);
+                if (versionClasses == null) {
+                    continue;
+                }
+                List<ClassNode> mainClasses = new ArrayList<>(versionClasses.values());
+                mainClasses.sort((n1, n2) -> n1.name.compareTo(n2.name));
+                for (int earlierVersion = mrjVersion; earlierVersion >= 8; earlierVersion--) {
+                    Map<String, ClassNode> availableEarlier = mrjClasses.get(earlierVersion);
+                    if (availableEarlier == null) {
+                        continue;
+                    }
+                    for (Map.Entry<String, ClassNode> earlierEntry : availableEarlier.entrySet()) {
+                        versionClasses.putIfAbsent(earlierEntry.getKey(), earlierEntry.getValue());
+                    }
+                }
+
+                List<ClassNode> allClasses = new ArrayList<>(libraryNodes.values());
+                allClasses.addAll(mainClasses);
+                SimpleTopLevelLookup allTopLevelLookup = new SimpleTopLevelLookup(allClasses);
+                DebugableMemberLister libraryMemberLister = new DebugableMemberLister(allTopLevelLookup, libraryNodes);
+
+                @SuppressWarnings("null")
+                SimpleHierarchyAwareMappingLookup mixinLookup = new SimpleHierarchyAwareMappingLookup(new ArrayList<>(versionClasses.values()));
+                ReadOnlyMappingLookupSink readOnlyExternalLookups = new ReadOnlyMappingLookupSink(externalLookups);
+                MappingLookup externalHierarchyLookup = new HierarchyAwareMappingDelegator<>(readOnlyExternalLookups, allTopLevelLookup);
+                ChainMappingLookup allLookup = new ChainMappingLookup(mixinLookup, externalHierarchyLookup);
+                MicromixinRemapper mixinRemapper = new MicromixinRemapper(allLookup, mixinLookup, libraryMemberLister);
+                Remapper coreRemaper = new Remapper(allLookup);
+
+                StringBuilder sharedBuilder = new StringBuilder();
+                for (ClassNode mainNode : mainClasses) {
+                    mainNode = Objects.requireNonNull(mainNode);
+
+                    StarplaneAnnotationRemapper.apply(mainNode, coreRemaper, sharedBuilder);
+                    try {
+                        mixinRemapper.remapClass(mainNode);
+                    } catch (IllegalMixinException | MissingFeatureException e) {
+                        throw new IOException("Unable to remap due to a problem which occured while remapping mixin " + mainNode.name + " in multi-release-jar sourceset " + mrjVersion, e);
+                    }
+
+                    coreRemaper.remapNode(mainNode, sharedBuilder);
+
+                    ClassWriter writer = new ClassWriter(0);
+                    mainNode.accept(writer);
+                    if (mrjVersion != 8) {
+                        zipOut.putNextEntry(new ZipEntry("META-INF/versions/" + mrjVersion + "/" + mainNode.name + ".class"));
+                    } else {
+                        zipOut.putNextEntry(new ZipEntry(mainNode.name + ".class"));
+                    }
+                    zipOut.write(writer.toByteArray());
+                }
+
+                if (mrjVersion == 8) {
+                    for (Map.Entry<String, byte[]> resource : rawFiles.entrySet()) {
+                        zipOut.putNextEntry(new ZipEntry(resource.getKey()));
+                        byte[] data = resource.getValue();
+                        if (resource.getKey().toLowerCase(Locale.ROOT).endsWith(".ras")) {
+                            data = new RASRemapper(allLookup, sharedBuilder).transform(data, "jar://?!" + resource.getKey());
+                        }
+                        zipOut.write(data);
+                    }
+                }
+            }
+        }
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof ObfuscationHandler) {
@@ -516,63 +755,12 @@ public class ObfuscationHandler {
         return compileAccess;
     }
 
-    @NotNull
-    @Unmodifiable
-    @Contract(pure = true)
-    private List<@NotNull String> compileSoftmap(@NotNull Path softmapFile, @NotNull List<@NotNull ClassNode> obfuscatedNodes) throws IOException {
-        long fileStart = System.currentTimeMillis();
-        String softmapContent = new String(Files.readAllBytes(softmapFile), StandardCharsets.UTF_8);
-        SoftmapContext softmapContext = SoftmapContext.parse(softmapContent, 0, softmapContent.length(), 1, 1);
-
-        List<SoftmapParseError> parseErrors = softmapContext.getParseErrors();
-        if (!parseErrors.isEmpty()) {
-            System.out.println();
-            for (SoftmapParseError error : parseErrors) {
-                String contentSplice;
-                if (error.endCodepoint - error.startCodepoint < 100) {
-                    contentSplice = softmapContent.substring(error.startCodepoint, error.endCodepoint);
-                } else {
-                    contentSplice = softmapContent.substring(error.startCodepoint, error.startCodepoint + 80);
-                    contentSplice = contentSplice + "... (and " + (error.endCodepoint - error.startCodepoint - 80) + " further characters)";
-                }
-                ObfuscationHandler.LOGGER.error("Syntax error in softmap file {} (row {}, column {}): {}", softmapFile, error.row, error.column, error.getDescription());
-                ObfuscationHandler.LOGGER.error("Invalid token: {}", contentSplice);
-            }
-            System.out.println();
-        }
-
-        @SuppressWarnings("null")
-        ApplicationResult result = softmapContext.tryApply(obfuscatedNodes);
-
-        List<SoftmapApplicationError> applyErrors = result.getErrors();
-        if (!applyErrors.isEmpty()) {
-            System.out.println();
-            for (SoftmapApplicationError error : applyErrors) {
-                String contentSplice;
-                Token errorLoc = error.getErrorLocation();
-                if (errorLoc.getStart() - errorLoc.getEnd() < 100) {
-                    contentSplice = softmapContent.substring(errorLoc.getStart(), errorLoc.getEnd());
-                } else {
-                    contentSplice = softmapContent.substring(errorLoc.getStart(), errorLoc.getStart() + 80);
-                    contentSplice = contentSplice + "... (and " + (errorLoc.getEnd() - errorLoc.getStart() - 80) + " further characters)";
-                }
-                ObfuscationHandler.LOGGER.error("Application error in softmap file {} (row {}, column {}): {}.", softmapFile, errorLoc.getRow(), errorLoc.getColumn(), error.getDescription());
-                ObfuscationHandler.LOGGER.error("Invalid token: {}", contentSplice);
-            }
-            System.out.println();
-        }
-
-        ObfuscationHandler.LOGGER.info("Softmap file {} compiled in {}ms.", softmapFile, (System.currentTimeMillis() - fileStart));
-        return result.getGeneratedTinyV1Mappings();
-    }
-
     @Override
     public int hashCode() {
         return Objects.hash(this.rasContent, this.cacheDir, this.projectDir, this.softmapFiles);
     }
 
-    public void reobfuscateJar(@NotNull Path jarPath, @NotNull Path starmappedGalimulator,
-            @NotNull Collection<@NotNull Path> alsoInclude) throws IOException {
+    public void reobfuscateJar(@NotNull Path jarPath, @NotNull Collection<@NotNull Path> alsoInclude) throws IOException {
         Path spstarmap = this.cacheDir.resolve(ObfuscationHandler.STARMAP_FILE_NAME);
         Path slintermediary = this.cacheDir.resolve(ObfuscationHandler.INTERMEDIARY_FILE_NAME);
         Path compiledSoftmap = this.cacheDir.resolve(ObfuscationHandler.COMPILED_SOFTMAP_FILE_NAME);
@@ -639,7 +827,7 @@ public class ObfuscationHandler {
         }
 
         Map<String, ClassNode> libraryNodes = new HashMap<>();
-        try (InputStream is = Files.newInputStream(starmappedGalimulator);
+        try (InputStream is = Files.newInputStream(this.getTransformedGalimulatorJar());
                 ZipInputStream zipIn = new ZipInputStream(is, StandardCharsets.UTF_8)) {
             ZipEntry e;
             while ((e = zipIn.getNextEntry()) != null) {

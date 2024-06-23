@@ -16,7 +16,7 @@ public class XmlWriter extends BufferedWriter implements AutoCloseable {
 
     protected void writeIndent() throws IOException {
         for (int i = 0; i < this.indent; i++) {
-            super.write(INDENT_STRING);
+            super.write(XmlWriter.INDENT_STRING);
         }
     }
 
