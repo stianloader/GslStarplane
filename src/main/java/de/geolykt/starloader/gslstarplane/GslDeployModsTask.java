@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -22,6 +23,7 @@ import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.component.SoftwareComponent;
 import org.gradle.api.internal.ConventionTask;
 import org.gradle.api.internal.component.UsageContext;
+import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.TaskAction;
@@ -33,55 +35,7 @@ import org.json.JSONObject;
 import de.geolykt.starplane.Utils;
 
 @DisableCachingByDefault(because = "Not worth it")
-public class GslDeployModsTask extends ConventionTask {
-
-    @NotNull
-    private final List<Object> modJars = new ArrayList<>();
-
-    public void from(Object notation) {
-        if (notation instanceof Task) {
-            super.dependsOn(notation);
-        }
-        this.modJars.add(notation);
-    }
-
-    public void from(Object... notation) {
-        for (Object o : notation) {
-            this.from(o);
-        }
-    }
-
-    @NotNull
-    @Internal
-    public List<@NotNull Path> getModPaths() {
-        Set<@NotNull Path> out = new LinkedHashSet<>();
-        for (Object modJar : this.modJars) {
-            if (modJar instanceof SoftwareComponent) {
-                for (UsageContext usageCtx : GradleInteropUtil.getUsageContexts((SoftwareComponent) modJar)) {
-                    if (usageCtx == null) {
-                        continue; // Better safe than sorry
-                    }
-                    for (PublishArtifact artifact : usageCtx.getArtifacts()) {
-                        if (artifact == null) {
-                            continue;
-                        }
-                        out.add(artifact.getFile().toPath());
-                    }
-                }
-            } else if (modJar instanceof PublishArtifact) {
-                out.add(((PublishArtifact) modJar).getFile().toPath());
-            } else if (modJar instanceof AbstractArchiveTask) {
-                out.add(((AbstractArchiveTask) modJar).getArchiveFile().get().getAsFile().toPath());
-            } else if (modJar instanceof Configuration) {
-                for (File resolvedEntry : ((Configuration) modJar).resolve()) {
-                    out.add(resolvedEntry.toPath());
-                }
-            } else {
-                out.add(super.getProject().file(modJar).toPath());
-            }
-        }
-        return new ArrayList<>(out);
-    }
+public abstract class GslDeployModsTask extends ConventionTask {
 
     public static Optional<String> getExtensionName(@NotNull Path in) throws IOException {
         try (InputStream rawIn = Files.newInputStream(in);
@@ -95,6 +49,13 @@ public class GslDeployModsTask extends ConventionTask {
             }
         }
         return Optional.empty();
+    }
+
+    @NotNull
+    private final List<Object> modJars = new ArrayList<>();
+
+    public GslDeployModsTask() {
+        this.getRemapMods().convention(false);
     }
 
     @TaskAction
@@ -171,9 +132,61 @@ public class GslDeployModsTask extends ConventionTask {
         }
     }
 
+    public void from(Object notation) {
+        if (notation instanceof Task) {
+            super.dependsOn(notation);
+        }
+        this.modJars.add(notation);
+    }
+
+    public void from(Object... notation) {
+        for (Object o : notation) {
+            this.from(o);
+        }
+    }
+
+    @NotNull
+    @Internal
+    public List<@NotNull Path> getModPaths() {
+        Set<@NotNull Path> out = new LinkedHashSet<>();
+        for (Object modJar : this.modJars) {
+            if (modJar instanceof SoftwareComponent) {
+                for (UsageContext usageCtx : GradleInteropUtil.getUsageContexts((SoftwareComponent) modJar)) {
+                    if (usageCtx == null) {
+                        continue; // Better safe than sorry
+                    }
+                    for (PublishArtifact artifact : usageCtx.getArtifacts()) {
+                        if (artifact == null) {
+                            continue;
+                        }
+                        out.add(artifact.getFile().toPath());
+                    }
+                }
+            } else if (modJar instanceof PublishArtifact) {
+                out.add(((PublishArtifact) modJar).getFile().toPath());
+            } else if (modJar instanceof AbstractArchiveTask) {
+                out.add(((AbstractArchiveTask) modJar).getArchiveFile().get().getAsFile().toPath());
+            } else if (modJar instanceof Configuration) {
+                for (File resolvedEntry : ((Configuration) modJar).resolve()) {
+                    out.add(resolvedEntry.toPath());
+                }
+            } else {
+                out.add(super.getProject().file(modJar).toPath());
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    @Internal
+    public abstract Property<Boolean> getRemapMods();
+
     private void transform(@NotNull Path source, @NotNull Path target) {
         try {
-            GslStarplanePlugin.OBF_HANDLERS.get(this.getProject()).deobfuscateJar(source, target);
+            if (this.getRemapMods().get()) {
+                GslStarplanePlugin.OBF_HANDLERS.get(this.getProject()).deobfuscateJar(source, target);
+            } else {
+                Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("Unable to copy target " + target + " from " + source, e);
         }

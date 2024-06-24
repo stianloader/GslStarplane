@@ -28,6 +28,24 @@ public class DebugableMemberLister implements MemberLister {
     }
 
     @Override
+    @Nullable
+    public Collection<MemberRef> getReportedClassMembers(@NotNull String owner) {
+        ClassNode node = this.libraryNodes.get(owner);
+        if (node == null) {
+            return null;
+        }
+
+        List<MemberRef> collected = new ArrayList<>();
+        for (MethodNode method : node.methods) {
+            collected.add(new MemberRef(owner, method.name, method.desc));
+        }
+        for (FieldNode field : node.fields) {
+            collected.add(new MemberRef(owner, field.name, field.desc));
+        }
+        return collected;
+    }
+
+    @Override
     public boolean hasMemberInHierarchy(@NotNull String clazz, @NotNull String name, @NotNull String desc) {
         if (this.debugging) {
             System.out.println("HMIH: " + clazz + "." + name + ":" + desc + "=" + (this.topTevelLookup.realmOf(new MemberRef(clazz, name, desc)) != null));

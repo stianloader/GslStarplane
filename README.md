@@ -175,8 +175,6 @@ Starloader-launcher extensions) will get copied into the extension directory.
 All mods with the same id/name that already exist in the extension directory
 will get removed in order to avoid duplicates.
 
-During the copy process the starplane annotations will get evaluated.
-
 **WARNING:** Removing a mod from the `deployMods` list will not remove them
 from the extensions folder yet. This may get changed should there be sufficient
 momentum.
@@ -288,7 +286,7 @@ in the future (it is plausible that all runtime elements will be available to us
 anyways due to shading).
 
 It is generally not advisable to add mods through the devRuntime, instead the
-deployMods should be configured accordingly. Failure to understand this may
+deployMods task should be configured accordingly. Failure to understand this may
 result in mods not properly loading or other classloading issues.
 
 ## Selecting the mappings
@@ -300,6 +298,9 @@ or traditional mapping formats.
 ### Declaring softmaps
 
 *Note: This is an experimental feature and is subject to change*
+
+**WARNING**: This feature turned out to be less capable than anticipated and
+will likely be removed. Use other supplementary mappings instead.
 
 **WARNING**: At this point in time layered mappings are planned, but not yet
 fully supported. Handle multiple softmap mappings with care, as current behaviour
@@ -352,6 +353,73 @@ mapping file. Aside from `String`, following types can be used:
 For mapping formats with multiple namespaces (such as those of the tiny family),
 the source namespace is the first column where as the destination (deobfuscated)
 namespace is the last column.
+
+### Using the development environment with asymmetric deobfuscation mappings
+
+*Hint*: By nature, the production environment uses the common "official"
+(i.e. obfuscated) namespace which leads to the production environment having
+symmetric deobfuscation mappings. This means that the issue described in this
+section is exclusive to the development environment.
+
+When using supplementary mappings with dependency mods, then all dependency mods
+need to make use of the same supplementary mappings. Such an environment is
+described to have symmetric deobfuscation mappings. However, in practice
+this is unlikely to occur, in which case the environment has asymmetric
+deobfuscation mappings.
+
+Asymmetric deobfuscation mappings may lead to crashes or other incompatibilities
+induced by classes or members not existing in one mapping namespace while
+existing in the other. As such, common symptoms of this issue are
+`ClassNotFoundException`s, `ClassDefNotFoundError`s and `LinkageError`s.
+
+To rememdy this issue, the dependency mods have to be remapped into a common
+mapping namespace. Gsl-Starplane uses the mapping namespace of the mod defined
+by the project it was applied on as the common namespace, remapping all
+deployed mods to that namespace. However, it will **only do so if configured.**
+
+An example of proper configuration is as follows:
+```groovy
+configurations {
+    dependencyMods
+}
+
+deployMods {
+    from configurations["dependencyMods"]
+    remapMods = true
+}
+
+dependencies {
+    dependencyMods("de.geolykt:starloader-api:2.0.0-a20240624:remapped")
+    compileOnlyApi("de.geolykt:starloader-api:2.0.0-a20240624")
+    // [...]
+}
+``` 
+
+The two important parts are that you use `remapMods = true` for the `deployMods`
+task (the default value is `false`) and that you use the remapped
+(i.e. obfuscated) jars for the deployment inputs. In most cases this corresponds
+to using the artifact with the `remapped` classifier. In general, when using
+`remapMods = true`, the jars configured to be used by `deployMods` should be
+the same kind of jars used within the production environment.
+
+Failure to use the obfuscated jars as the input is likely going to cause issues
+with inferring the names of mixin targets. It may work in other circumstances,
+but this is behaviour that should not be depended on.
+
+*Note*: Due to how gsl-starplane remaps starplane-annotations annotations,
+mods built using older versions of gsl-starplane (that is before 2024-06-24)
+will be incompatible with this process. However, this detail will unlikely
+have an impact for you. Mods built using newer versions of gsl-starplane
+or mods that do not make use of starplane-annotations are unaffected.
+
+*Tip*: Due to how IDEs retrieve source and javadoc artifacts, it is
+advisable to use the `remapped` artifact for the configuration used
+for `deployMods` where as the compilation classpath is provided with the
+standard non-remapped (i.e. dev env) jar. The above example follows this
+principle. Do note that when doing this, `compileOnlyApi` does not need to
+extend from `dependencyMods` even though doing so is recommended in
+previous sections. That being said, disregarding this tip should have
+no averse consequences if you know how to navigate with these issues.
 
 ## Decompilation
 

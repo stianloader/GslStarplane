@@ -218,9 +218,9 @@ public class ObfuscationHandler {
         Path compiledSoftmap = this.cacheDir.resolve(ObfuscationHandler.COMPILED_SOFTMAP_FILE_NAME);
 
         List<@NotNull MappingLookup> lookups = new ArrayList<>();
-        lookups.add(new StarplaneMappingLookup(compiledSoftmap, true, true).load());
-        lookups.add(new StarplaneMappingLookup(spstarmap, true).load());
-        lookups.add(new StarplaneMappingLookup(slintermediary, true).load());
+        lookups.add(new StarplaneMappingLookup(slintermediary, false).load());
+        lookups.add(new StarplaneMappingLookup(spstarmap, false).load());
+        lookups.add(new StarplaneMappingLookup(compiledSoftmap, false, true).load());
 
         if (!this.supplementaryMappings.isEmpty()) {
             LOGGER.info("Loading supplementary mappings");
@@ -235,7 +235,7 @@ public class ObfuscationHandler {
                     throw new IOException("Unable to consume supplementary mappings file at " + supplementaryMapping, e);
                 }
                 mappingTree.reset();
-                lookups.add(0, new ReadOnlyMIOMappingLookup(mappingTree, mappingTree.getMaxNamespaceId() - 1, mappingTree.getMinNamespaceId()));
+                lookups.add(new ReadOnlyMIOMappingLookup(mappingTree, mappingTree.getMinNamespaceId(), mappingTree.getMaxNamespaceId() - 1));
             }
         }
 
@@ -274,7 +274,7 @@ public class ObfuscationHandler {
         }
 
         Map<String, ClassNode> libraryNodes = new HashMap<>();
-        try (InputStream is = Files.newInputStream(this.getTransformedGalimulatorJar());
+        try (InputStream is = Files.newInputStream(this.getOriginalGalimulatorJar());
                 ZipInputStream zipIn = new ZipInputStream(is, StandardCharsets.UTF_8)) {
             ZipEntry e;
             while ((e = zipIn.getNextEntry()) != null) {

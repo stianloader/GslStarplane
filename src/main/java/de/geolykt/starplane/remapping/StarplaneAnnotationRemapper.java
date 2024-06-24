@@ -49,11 +49,8 @@ public class StarplaneAnnotationRemapper {
             if (annotations == null) {
                 continue;
             }
-            Iterator<AnnotationNode> it = annotations.iterator();
-            while (it.hasNext()) {
-                AnnotationNode annotation = it.next();
+            for (AnnotationNode annotation : annotations) {
                 if (annotation.desc.equals("Lde/geolykt/starloader/starplane/annotations/StarplaneReobfuscateReference;")) {
-                    it.remove();
                     if (clinitMethod == null) {
                         throw new IllegalStateException("Illegal bytecode: " + node.name + '.' + field.name + ' ' + field.desc + ": No clinit found");
                     }
@@ -73,7 +70,6 @@ public class StarplaneAnnotationRemapper {
                     }
                     break;
                 } else if (annotation.desc.equals("Lde/geolykt/starloader/starplane/annotations/RemapClassReference;")) {
-                    it.remove();
                     if (annotation.values == null || annotation.values.size() == 0) {
                         StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapClassReference, but neither the 'name' nor the 'type' value of the annotation is set.", node.name, field.name, field.desc);
                         break;
@@ -93,7 +89,6 @@ public class StarplaneAnnotationRemapper {
                     }
                     classMapRequests.put(new MemberRef(node.name, field.name, field.desc), typeName);
                 } else if (annotation.desc.equals("Lde/geolykt/starloader/starplane/annotations/RemapMemberReference;")) {
-                    it.remove();
                     if (annotation.values == null) {
                         StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but does not define any of the required values.", node.name, field.name, field.desc);
                         break;
