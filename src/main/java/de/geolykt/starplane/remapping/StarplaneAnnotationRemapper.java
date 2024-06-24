@@ -2,7 +2,6 @@ package de.geolykt.starplane.remapping;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -80,11 +79,13 @@ public class StarplaneAnnotationRemapper {
                     }
                     String typeName;
                     if (annotation.values.get(0).equals("name")) {
-                        typeName = ((String) annotation.values.get(0)).replace('.', '/');
+                        typeName = ((String) annotation.values.get(1)).replace('.', '/');
+                        annotation.values.set(1, Remapper.remapInternalName(remapper.getLookup(), typeName, sharedBuilder));
                     } else if (annotation.values.get(0).equals("type")) {
                         typeName = ((Type) annotation.values.get(1)).getInternalName();
+                        // Type remapping is thankfully performed by stianloader-remapper already
                     } else {
-                        StarplaneAnnotationRemapper.LOGGER.error("Erroneous annotation value: " + annotation.values.get(0) + " for RemapClassReference. Are you depending on the wrong starplane-annotations version?");
+                        StarplaneAnnotationRemapper.LOGGER.error("Erroneous annotation key: " + annotation.values.get(0) + " for RemapClassReference. Are you depending on the wrong starplane-annotations version?");
                         break;
                     }
                     classMapRequests.put(new MemberRef(node.name, field.name, field.desc), typeName);
@@ -97,24 +98,33 @@ public class StarplaneAnnotationRemapper {
                         StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but more than the required values of the annotation is set. Consider removing duplicates.", node.name, field.name, field.desc);
                         break;
                     }
+
                     String typeName = null;
                     String memberName = null;
                     String memberDesc = null;
                     String format = null;
+
+                    int ordinalTypeName = 0;
+                    int ordinalMemberName = 0;
+                    int ordinalMemberDesc = 0;
+
                     for (int i = 0; i < annotation.values.size(); i += 2) {
                         String valueName = ((String) annotation.values.get(i));
                         if (valueName.equals("ownerType")) {
                             typeName = ((Type) annotation.values.get(i + 1)).getInternalName();
                         } else if (valueName.equals("owner")) {
                             typeName = ((String) annotation.values.get(i + 1)).replace('.', '/');
+                            ordinalTypeName = i + 1;
                         } else if (valueName.equals("name")) {
                             memberName = (String) annotation.values.get(i + 1);
+                            ordinalMemberName = i + 1;
                         } else if (valueName.equals("desc")) {
                             if (memberDesc != null) {
                                 StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", node.name, field.name, field.desc);
                                 break;
                             }
                             memberDesc = (String) annotation.values.get(i + 1);
+                            ordinalMemberDesc = i + 1;
                         } else if (valueName.equals("descType")) {
                             if (memberDesc != null) {
                                 StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but multiple values contain descriptor-giving values. Consider removing duplicated.", node.name, field.name, field.desc);
@@ -157,10 +167,31 @@ public class StarplaneAnnotationRemapper {
                         StarplaneAnnotationRemapper.LOGGER.error("Field {}.{}:{} is annotated with de/geolykt/starloader/starplane/annotations/RemapMemberReference, but neither the 'owner' nor the 'ownerType' value of the annotation is set. Consider setting one of these values.", node.name, field.name, field.desc);
                         break;
                     }
+
                     MemberRef targetTriple = new MemberRef(typeName, Objects.requireNonNull(memberName, "memberName == null"), Objects.requireNonNull(memberDesc, "memberDesc == null"));
                     MemberRef fieldTriple = new MemberRef(node.name, field.name, field.desc);
                     memberMapFormat.put(fieldTriple, format);
                     memberMapRequests.put(fieldTriple, targetTriple);
+
+                    if (ordinalTypeName != 0) {
+                        annotation.values.set(ordinalTypeName, remapper.getLookup().getRemappedClassName(typeName));
+                    }
+
+                    if (ordinalMemberName != 0) {
+                        if (memberDesc.codePointAt(0) == '(') {
+                            annotation.values.set(ordinalMemberName, remapper.getLookup().getRemappedMethodName(typeName, memberName, memberDesc));
+                        } else {
+                            annotation.values.set(ordinalMemberName, remapper.getLookup().getRemappedFieldName(typeName, memberName, memberDesc));
+                        }
+                    }
+
+                    if (ordinalMemberDesc != 0) {
+                        if (memberDesc.codePointAt(0) == '(') {
+                            annotation.values.set(ordinalMemberDesc, Remapper.getRemappedMethodDescriptor(remapper.getLookup(), memberDesc, sharedBuilder));
+                        } else {
+                            annotation.values.set(ordinalMemberDesc, Remapper.getRemappedFieldDescriptor(remapper.getLookup(), memberDesc, sharedBuilder));
+                        }
+                    }
                 }
             }
         }

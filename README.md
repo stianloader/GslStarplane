@@ -199,7 +199,7 @@ deployMods {
 
 dependencies {
     // Add the mod to the configuration (you can also add several mods to the same configuration)
-    dependencyMods "de.geolykt:starloader-api:2.0.0-SNAPSHOT"
+    dependencyMods "de.geolykt:starloader-api:2.0.0-a20240624.1"
 }
 ```
 
@@ -389,8 +389,8 @@ deployMods {
 }
 
 dependencies {
-    dependencyMods("de.geolykt:starloader-api:2.0.0-a20240624:remapped")
-    compileOnlyApi("de.geolykt:starloader-api:2.0.0-a20240624")
+    dependencyMods("de.geolykt:starloader-api:2.0.0-a20240624.1:remapped")
+    compileOnlyApi("de.geolykt:starloader-api:2.0.0-a20240624.1")
     // [...]
 }
 ``` 
