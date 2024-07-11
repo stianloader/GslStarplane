@@ -262,6 +262,66 @@ The value is a path element which is one of the following:
  - All other types that can be converted to `File`
    as per [Project#file](https://docs.gradle.org/8.1/javadoc/org/gradle/api/Project.html#file-java.lang.Object-).
 
+### Handling expansion of placeholder properties in the development environment
+
+Note: This feature requires SLL 4.0.0-a20240711 or newer. It will gracefully do nothing
+under older versions of SLL.
+
+Note: As of now, this feature is exclusive to the extension.json file. Expansion will
+thus not be handled in the development environment for other files. Be vigilant in that
+case.
+
+At times it can be tedious to remember to keep the extension.json file in sync with
+your gradle buildscripts (version mismatches anyone?). However for this problem gradle
+has a neat solution: Resource postprocessing or more specifically the expansion of
+placeholder properties. For this, you define that the extension.json file should get expanded
+using the project's properties within in your `build.gradle` buildscript:
+
+```groovy
+processResources {
+    filesMatching("extension.json") {
+        expand(project.properties)
+    }
+}
+```
+
+then you define your extension.json file with the appropriate placeholders. For this example
+we will go with the following, but in practice you can do much more than just that:
+
+```json
+{
+    "entrypoint": "de.geolykt.s2dmenues.S2DMenues",
+    "name": "S2DMenues",
+    "version": "${version}",
+    "dependencies": [ "StarloaderAPI" ]
+}
+```
+
+Then, you also want to define the value of the property. This is done within the `gradle.properties`
+file:
+
+```properties
+version=0.1.0
+```
+
+Now, everything works - mostly. However, when launching from the IDE you will quickly notice
+that the placeholders are never getting expanded. Henceforth, SLL provides a way to emulate the
+expansion of these placeholders at runtime. This is plainly done by specifying the file
+from which the properties shall be taken from. The file needs to be a `.properties` file - the
+`gradle.properties` file will usually suffice. Henceforth, you'll find yourself with the
+following in your `build.gradle` buildscript:
+
+```groovy
+genEclipseRuns {
+    propertyExpansionSource = project.file("gradle.properties")
+}
+```
+
+Note that only one source can be active at any given time.
+If the value is declared multiple times, the value will be plainly overriden by later calls.
+
+For this change to apply, the `genEclipseRuns` task has to be executed anew.
+
 ## Selecting the modloader (the `devRuntime` configuration)
 
 As of now, only SLL - regardless of mixin engine - can be used as a mod loader,

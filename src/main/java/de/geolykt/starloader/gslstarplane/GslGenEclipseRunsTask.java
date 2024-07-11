@@ -28,6 +28,7 @@ import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskAction;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.json.JSONArray;
 
 import de.geolykt.starplane.Utils;
@@ -42,6 +43,8 @@ public class GslGenEclipseRunsTask extends DefaultTask {
     }
 
     private final Map<String, List<Object>> additionalRuntimeDependencies;
+    @Nullable
+    public Object propertyExpansionSource = null;
     private final File runModLaunchFile;
 
     public GslGenEclipseRunsTask() {
@@ -96,6 +99,10 @@ public class GslGenEclipseRunsTask extends DefaultTask {
                 jvmArgs.add(GslStarplanePlugin.getBootPath(super.getProject()));
             }
             jvmArgs.add("-Dde.geolykt.starloader.launcher.IDELauncher.modURLs=" + getModURLs().toString());
+            Object propertyExpansionSource = this.propertyExpansionSource;
+            if (propertyExpansionSource != null) {
+                jvmArgs.add("-Dorg.stianloader.sll.IDELauncher.propertyExpansionSource=" + super.getProject().file(propertyExpansionSource).getAbsolutePath());
+            }
             Path dataFolder = workingDir.resolve("data");
 
             List<String> classpathElements = new ArrayList<>();
@@ -196,5 +203,9 @@ public class GslGenEclipseRunsTask extends DefaultTask {
     @OutputFile // Required in order for caching to work
     public File getRunModLaunchFile() {
         return this.runModLaunchFile;
+    }
+
+    public void propertyExpansionSource(@Nullable Object o) {
+        this.propertyExpansionSource = o;
     }
 }
