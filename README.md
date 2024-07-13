@@ -440,7 +440,9 @@ deployed mods to that namespace. However, it will **only do so if configured.**
 An example of proper configuration is as follows:
 ```groovy
 configurations {
-    dependencyMods
+    dependencyMods {
+        transitive = false
+    }
 }
 
 deployMods {
@@ -465,6 +467,18 @@ the same kind of jars used within the production environment.
 Failure to use the obfuscated jars as the input is likely going to cause issues
 with inferring the names of mixin targets. It may work in other circumstances,
 but this is behaviour that should not be depended on.
+
+As dependencies could depend on mods that don't have the `remapped` classifier,
+depending on certain mods may pull in mods that fail to remap. In general the
+mod that fails to remap is SLAPI. To prevent these transitive dependencies (or
+dependencies of dependencies, in layman's terms) being resolved, disable
+transitive resolution for your configuration - this can be configured by setting
+`transitive = false`. To verify that your change has the intended effect, you
+can look at the dependency graph of your desired configuration by running the
+`dependencies` task via the `./gradlew dependencies` command or similar. This
+also has the upside of eliminating non-mod entries, although in general
+gsl-starplane will do a good job at filtering out non-mod dependencies within
+the configuration.
 
 *Note*: Due to how gsl-starplane remaps starplane-annotations annotations,
 mods built using older versions of gsl-starplane (that is before 2024-06-24)
