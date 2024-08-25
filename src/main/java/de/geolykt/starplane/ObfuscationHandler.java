@@ -933,7 +933,7 @@ public class ObfuscationHandler {
                 for (ClassNode mainNode : mainClasses) {
                     mainNode = Objects.requireNonNull(mainNode);
 
-//                    if (mainNode.name.equals("de/geolykt/fastgalgen/mixins/QuadTreeMixins")) {
+//                    if (mainNode.name.equals("de/geolykt/starloader/apimixins/StarMixins")) {
 //                        allLookup.enableDebugMode(true);
 //                        externalLookups.enableDebugMode(true);
 //                        libraryMemberLister.setDebugging(true);
@@ -948,7 +948,7 @@ public class ObfuscationHandler {
 
                     coreRemaper.remapNode(mainNode, sharedBuilder);
 
-//                    if (mainNode.name.equals("de/geolykt/fastgalgen/mixins/QuadTreeMixins")) {
+//                    if (mainNode.name.equals("de/geolykt/starloader/apimixins/StarMixins")) {
 //                        allLookup.enableDebugMode(false);
 //                        externalLookups.enableDebugMode(false);
 //                        libraryMemberLister.setDebugging(false);
