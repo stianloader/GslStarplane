@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -69,7 +70,7 @@ public abstract class GslDeployModsTask extends ConventionTask {
                 continue;
             }
             try {
-                Optional<String> name = getExtensionName(modPath);
+                Optional<String> name = GslDeployModsTask.getExtensionName(modPath);
                 if (name.isPresent()) {
                     mods.add(modPath);
                     extensionNames.add(name.get());
@@ -106,7 +107,7 @@ public abstract class GslDeployModsTask extends ConventionTask {
                 continue;
             }
             try {
-                Optional<String> name = getExtensionName(f.toPath());
+                Optional<String> name = GslDeployModsTask.getExtensionName(f.toPath());
                 if (name.isPresent() && extensionNames.contains(name.get())) {
                     f.delete();
                     continue;
@@ -120,7 +121,7 @@ public abstract class GslDeployModsTask extends ConventionTask {
             try {
                 Path target = mod.getFileName();
                 if (target == null) {
-                    target = modDirectory.resolve("extension.jar");
+                    target = modDirectory.resolve("extension-" + GslDeployModsTask.getExtensionName(mod).orElseGet(() -> Long.toString(ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE), Character.MAX_RADIX)) + "-.jar");
                 } else {
                     target = modDirectory.resolve(target);
                 }

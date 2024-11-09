@@ -20,7 +20,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Collection of static utility methods originating from the starloader-launcher.
+ * Collection of static utility methods originating from SLL.
  */
 public final class Utils {
 

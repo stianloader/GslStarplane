@@ -17,6 +17,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -354,21 +355,32 @@ public class ObfuscationHandler {
                 }
 
                 List<ClassNode> allClasses = new ArrayList<>(libraryNodes.values());
-                allClasses.addAll(mainClasses);
+                allClasses.addAll(versionClasses.values());
                 SimpleTopLevelLookup allTopLevelLookup = new SimpleTopLevelLookup(allClasses);
                 DebugableMemberLister libraryMemberLister = new DebugableMemberLister(allTopLevelLookup, libraryNodes);
 
                 @SuppressWarnings("null")
-                SimpleHierarchyAwareMappingLookup mixinLookup = new SimpleHierarchyAwareMappingLookup(new ArrayList<>(versionClasses.values()));
+                SimpleHierarchyAwareMappingLookup mixinLookup = new SimpleHierarchyAwareMappingLookup(Collections.unmodifiableList(allClasses));
                 ReadOnlyMappingLookupSink readOnlyExternalLookups = new ReadOnlyMappingLookupSink(externalLookups);
                 MappingLookup externalHierarchyLookup = new HierarchyAwareMappingDelegator<>(readOnlyExternalLookups, allTopLevelLookup);
                 ChainMappingLookup allLookup = new ChainMappingLookup(mixinLookup, externalHierarchyLookup);
                 MicromixinRemapper mixinRemapper = new MicromixinRemapper(allLookup, mixinLookup, libraryMemberLister);
                 Remapper coreRemaper = new Remapper(allLookup);
 
+                // Note: Uncomment below lines at your own risk! In the case of faststar, this produces a 1.3 GiB log file
+//                System.out.println("-----------------------------------------------------");
+//                DebugHelper.debugMemberRealms(allClasses);
+//                System.out.println("-----------------------------------------------------");
+
                 StringBuilder sharedBuilder = new StringBuilder();
                 for (ClassNode mainNode : mainClasses) {
                     mainNode = Objects.requireNonNull(mainNode);
+
+//                    if (mainNode.name.equals("de/geolykt/starloader/impl/asm/TransformCallbacks$1")) {
+//                        allLookup.enableDebugMode(true);
+//                        externalLookups.enableDebugMode(true);
+//                        libraryMemberLister.setDebugging(true);
+//                    }
 
                     StarplaneAnnotationRemapper.apply(mainNode, coreRemaper, sharedBuilder);
                     try {
@@ -378,6 +390,12 @@ public class ObfuscationHandler {
                     }
 
                     coreRemaper.remapNode(mainNode, sharedBuilder);
+
+//                    if (mainNode.name.equals("de/geolykt/starloader/impl/asm/TransformCallbacks$1")) {
+//                        allLookup.enableDebugMode(false);
+//                        externalLookups.enableDebugMode(false);
+//                        libraryMemberLister.setDebugging(false);
+//                    }
 
                     ClassWriter writer = new ClassWriter(0);
                     mainNode.accept(writer);
