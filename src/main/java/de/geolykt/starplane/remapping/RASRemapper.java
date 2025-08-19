@@ -130,7 +130,7 @@ public class RASRemapper {
                 line = '0' + line.substring(1);
             }
             line = line.trim();
-            String[] parts = line.split("\\s+");
+            @NotNull String[] parts = line.split("\\s+");
             if (parts.length != 4 && parts.length != 6) {
                 getLogger().error("Malformed ReversibleAccessSetter transform in line " + lineNumber + " of namespace " + namespace + ": Expected format \"<prefix>scope <original-access> <target-access> <className>\" or \"<prefix>scope <original-access> <target-access> <className> <memberName> <memberDescriptor>\". (Consists of " + parts.length + " parts, but expected 4 or 6 parts)");
                 continue;

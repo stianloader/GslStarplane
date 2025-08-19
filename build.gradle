@@ -6,17 +6,19 @@ plugins {
 }
 
 group = 'de.geolykt.starloader'
-archivesBaseName = 'gsl-starplane'
-def baseVersion = '0.2.1'
+base {
+    archivesName = 'gsl-starplane'
+}
+def baseVersion = '0.2.2'
 
-targetCompatibility = compileJava.targetCompatibility = '11' // VF is Java 11+ - so we have little other choices for the time being
-sourceCompatibility = compileJava.sourceCompatibility = '11'
+java.targetCompatibility = compileJava.targetCompatibility = '11' // VF is Java 11+ - so we have little other choices for the time being
+java.sourceCompatibility = compileJava.sourceCompatibility = '11'
 
 repositories {
     mavenLocal()
     maven {
-        name 'stianloader-maven'
-        url 'https://stianloader.org/maven/'
+        name = 'stianloader-maven'
+        url = 'https://stianloader.org/maven/'
     }
     mavenCentral()
 }
@@ -28,24 +30,24 @@ dependencies {
     implementation "de.geolykt.starloader:reversible-access-setter:1.0.0"
 
     implementation gradleApi()
-    implementation "org.ow2.asm:asm:9.7.1"
-    implementation "org.ow2.asm:asm-tree:9.7.1"
-    implementation "org.ow2.asm:asm-util:9.7.1"
-    implementation "org.ow2.asm:asm-commons:9.7.1"
+    implementation "org.ow2.asm:asm:9.8"
+    implementation "org.ow2.asm:asm-tree:9.8"
+    implementation "org.ow2.asm:asm-util:9.8"
+    implementation "org.ow2.asm:asm-commons:9.8"
 
     // https://mvnrepository.com/artifact/org.json/json
-    implementation 'org.json:json:20240303'
+    implementation 'org.json:json:20250517'
 
     // https://mvnrepository.com/artifact/org.vineflower/vineflower
-    implementation 'org.vineflower:vineflower:1.10.1'
+    implementation 'org.vineflower:vineflower:1.11.1'
 
     // https://mvnrepository.com/artifact/net.fabricmc/mapping-io
-    implementation 'net.fabricmc:mapping-io:0.6.1'
+    implementation 'net.fabricmc:mapping-io:0.7.1'
 
     implementation 'org.stianloader:softmap:0.1.0-a20240329'
 
     // https://mvnrepository.com/artifact/org.jetbrains/annotations
-    compileOnly group: 'org.jetbrains', name: 'annotations', version: '26.0.1'
+    compileOnly "org.jetbrains:annotations:26.0.2"
 
     implementation 'org.stianloader:stianloader-remapper:0.1.1-a20241109'
     implementation 'org.stianloader:micromixin-remapper:0.2.1-a20241028'
@@ -55,7 +57,7 @@ gradlePlugin {
     // Define the plugin
     plugins {
         gslStarplanePlugin {
-            id = project.archivesBaseName
+            id = base.archivesName.get()
             version = baseVersion
             implementationClass = 'de.geolykt.starloader.gslstarplane.GslStarplanePlugin'
         }
@@ -75,14 +77,14 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
 
 publishing {
     publications {
-        plugin(MavenPublication) { publication ->
-            groupId project.group
-            artifactId project.archivesBaseName
-            version baseVersion
+        mavenJava(MavenPublication) {
+            groupId = project.group
+            artifactId = base.archivesName.get()
+            version = baseVersion
 
             from components['java']
 
-            //artifact sourcesJar
+            artifact sourcesJar
             //artifact javadocJar
         }
     }

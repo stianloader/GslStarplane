@@ -2,6 +2,7 @@ package de.geolykt.starloader.gslstarplane;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,7 +12,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.gradle.api.Task;
-import org.gradle.api.UncheckedIOException;
 import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.component.SoftwareComponent;
 import org.gradle.api.internal.component.UsageContext;
@@ -24,7 +24,7 @@ import org.json.JSONArray;
 import de.geolykt.starplane.Utils;
 
 @DisableCachingByDefault(because = "Does not make sense")
-public class GslRunModsTask extends JavaExec {
+public abstract class GslRunModsTask extends JavaExec {
     @NotNull
     private final List<Object> extraMods = new ArrayList<>();
 

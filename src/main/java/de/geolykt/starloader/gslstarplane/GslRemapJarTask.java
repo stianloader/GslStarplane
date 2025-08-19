@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 import de.geolykt.starplane.ObfuscationHandler;
 
 @DisableCachingByDefault(because = "Not worth caching") // Gradle does this with the standard Jar task. But is this really the case?
-public class GslRemapJarTask extends Jar {
+public abstract class GslRemapJarTask extends Jar {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GslRemapJarTask.class);
     private final Set<Object> fromJars = new HashSet<>();
@@ -64,9 +64,9 @@ public class GslRemapJarTask extends Jar {
             }
 
             try {
-                LOGGER.info("Remapping");
+                GslRemapJarTask.LOGGER.info("Remapping");
                 oHandler.reobfuscateJar(super.getArchiveFile().get().getAsFile().toPath(), includes);
-                LOGGER.info("Remap complete");
+                GslRemapJarTask.LOGGER.info("Remap complete");
             } catch (IOException e) {
                 throw new UncheckedIOException("Unable to remap", e);
             }

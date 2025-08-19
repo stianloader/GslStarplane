@@ -616,7 +616,7 @@ public class Autodeobf implements StarmappedNames {
         remapMethod(mappingsStream, landmarkManagerClass, regenerateLandmarksMethod, "regenerateLandmarks", "()V");
     }
 
-    private void remapClass(Writer mappingsOut, String oldName, String newName) throws IOException {
+    private void remapClass(Writer mappingsOut, @NotNull String oldName, @NotNull String newName) throws IOException {
         remapper.remapClassName(oldName, newName);
         mappingsOut.write("CLASS ");
         mappingsOut.write(oldName);
@@ -778,10 +778,7 @@ public class Autodeobf implements StarmappedNames {
                             if (settingsCheckboxNode == null) {
                                 throw new OutdatedDeobfuscatorException("Dialog", SETTINGS_DIALOG_CHECKBOX_CLASS, "*", "Unresolved node");
                             }
-                            labeledCheckboxComponent = settingsCheckboxNode.superName;
-                            if (labeledCheckboxComponent == null) {
-                                throw new IllegalStateException(settingsCheckboxNode.name + " without superclass");
-                            }
+                            labeledCheckboxComponent = Objects.requireNonNull(settingsCheckboxNode.superName, settingsCheckboxNode.name + " without superclass");
                             remapClass(mappingsStream, labeledCheckboxComponent, LABELED_CHECKBOX_COMPONENT);
 
                             assignAsAnonymousClass(settingsDialog, method, settingsCheckbox);
@@ -2357,6 +2354,9 @@ public class Autodeobf implements StarmappedNames {
         }
         if (generateMapMethod == null) {
             throw new OutdatedDeobfuscatorException("Noise", FRACTAL_STAR_GENERATOR_CLASS, "generateMap", "Unresolved");
+        }
+        if (perlinGeneratorClass == null) {
+            throw new OutdatedDeobfuscatorException("Noise", PERLIN_NOISE_GENERATOR_CLASS, "*", "Unresolved");
         }
         remapMethod(mappingsString, FRACTAL_STAR_GENERATOR_CLASS, simplexMethod, "generateSimplex", "()V");
         remapMethod(mappingsString, FRACTAL_STAR_GENERATOR_CLASS, perlinMethod, "generatePerlin", "()V");

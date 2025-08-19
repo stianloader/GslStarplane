@@ -130,10 +130,9 @@ public class GslExtension {
                 || notation instanceof Closure<?>
                 || notation instanceof Callable<?>) {
             this.softmapMappings.add(notation);
-        } else if (Objects.isNull(notation)) {
-            throw new IllegalArgumentException("Notation may not be null");
         } else {
-            throw new IllegalArgumentException("Notation not of supported type. Please consult the gslStarplane README for further details. Notation is an instance of " + notation.getClass().getName());
+            Objects.requireNonNull("Argument 'notation' may not be null");
+            throw new IllegalArgumentException("Notation not of supported type. Please consult the gslStarplane README for further details. Argument 'notation' is an instance of " + notation.getClass().getName());
         }
     }
 

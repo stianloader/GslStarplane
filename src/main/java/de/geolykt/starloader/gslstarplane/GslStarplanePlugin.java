@@ -72,9 +72,9 @@ public class GslStarplanePlugin implements Plugin<Project> {
         project.getExtensions().create(GslExtension.class, "starplane", GslExtension.class);
         project.afterEvaluate(GslStarplanePlugin::runDeobf);
         project.afterEvaluate(GslStarplanePlugin::setupEEA);
-        project.getTasks().create("remapJar", GslRemapJarTask.class, (task) -> {
+        project.getTasks().register("remapJar", GslRemapJarTask.class, (task) -> {
             task.setDescription("Remap deobfuscated jars to use obfuscated mappings.");
-            task.setGroup(TASK_GROUP);
+            task.setGroup(GslStarplanePlugin.TASK_GROUP);
         });
         project.getConfigurations().register(DEV_RUNTIME_CONFIGURATION_NAME).configure(configuration -> {
             configuration.setVisible(false);
@@ -83,14 +83,14 @@ public class GslStarplanePlugin implements Plugin<Project> {
             SourceSetContainer sourceSets = (SourceSetContainer) Objects.requireNonNull(project.getProperties().get("sourceSets"));
             configuration.extendsFrom(project.getConfigurations().getByName(sourceSets.getByName("main").getRuntimeClasspathConfigurationName()));
         });
-        project.getTasks().create("deployMods", GslDeployModsTask.class, (task) -> {
+        project.getTasks().register("deployMods", GslDeployModsTask.class, (task) -> {
             task.setDescription("Deploy mods to the extension directory of the development environment.");
-            task.setGroup(TASK_GROUP);
+            task.setGroup(GslStarplanePlugin.TASK_GROUP);
         });
-        RUN_TASKS.put(project, project.getTasks().create("runMods", GslRunModsTask.class));
-        project.getTasks().create("genEclipseRuns", GslGenEclipseRunsTask.class, (task) -> {
+        GslStarplanePlugin.RUN_TASKS.put(project, project.getTasks().maybeCreate("runMods", GslRunModsTask.class));
+        project.getTasks().register("genEclipseRuns", GslGenEclipseRunsTask.class, (task) -> {
             task.setDescription("Generate eclipse *.launch files");
-            task.setGroup(TASK_GROUP);
+            task.setGroup(GslStarplanePlugin.TASK_GROUP);
         });
     }
 
@@ -125,14 +125,14 @@ public class GslStarplanePlugin implements Plugin<Project> {
     }
 
     private static void runDeobf(Project project) {
-        if (OBF_HANDLERS.containsKey(project)) {
+        if (GslStarplanePlugin.OBF_HANDLERS.containsKey(project)) {
             return;
         }
         Path altCache = project.getLayout().getBuildDirectory().getAsFile().get().toPath().resolve("gsl-starplane");
 
         GslExtension extension = project.getExtensions().getByType(GslExtension.class);
 
-        Set<Path> softmapFiles = new HashSet<>();
+        Set<@NotNull Path> softmapFiles = new HashSet<>();
         for (Object notation : extension.softmapMappings) {
             if (notation instanceof Configuration) {
                 for (File f : ((Configuration) notation).resolve()) {
@@ -163,9 +163,9 @@ public class GslStarplanePlugin implements Plugin<Project> {
         supplementaryMappings = Collections.unmodifiableList(supplementaryMappings);
 
         ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getRASContents(project), softmapFiles, supplementaryMappings);
-        OBF_HANDLERS.put(project, oHandler);
+        GslStarplanePlugin.OBF_HANDLERS.put(project, oHandler);
         resolve(project, oHandler);
-        JavaExec runTask = RUN_TASKS.get(project);
+        JavaExec runTask = GslStarplanePlugin.RUN_TASKS.get(project);
         if (runTask != null) {
             runTask.systemProperty("de.geolykt.starloader.launcher.CLILauncher.mainClass", "com.example.Main");
             Path modsDir = extension.modDirectory;
@@ -179,8 +179,8 @@ public class GslStarplanePlugin implements Plugin<Project> {
     static String getBootPath(Project p) {
         JSONArray bootPath = new JSONArray();
         try {
-            bootPath.put(OBF_HANDLERS.get(p).getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toUri().toURL().toExternalForm());
-            for (File f : p.getConfigurations().getByName(GALIM_DEPS_CONFIGURATION_NAME).resolve()) {
+            bootPath.put(GslStarplanePlugin.OBF_HANDLERS.get(p).getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toUri().toURL().toExternalForm());
+            for (File f : p.getConfigurations().getByName(GslStarplanePlugin.GALIM_DEPS_CONFIGURATION_NAME).resolve()) {
                 bootPath.put(f.toURI().toURL().toExternalForm());
             }
         } catch (MalformedURLException e) {
@@ -202,9 +202,9 @@ public class GslStarplanePlugin implements Plugin<Project> {
         JarStripper stripper = new JarStripper();
         NamedDomainObjectProvider<Configuration> galimDepsConfig = null;
         try {
-            galimDepsConfig = project.getConfigurations().named(GALIM_DEPS_CONFIGURATION_NAME);
+            galimDepsConfig = project.getConfigurations().named(GslStarplanePlugin.GALIM_DEPS_CONFIGURATION_NAME);
         } catch (UnknownDomainObjectException e) {
-            galimDepsConfig = project.getConfigurations().register(GALIM_DEPS_CONFIGURATION_NAME);
+            galimDepsConfig = project.getConfigurations().register(GslStarplanePlugin.GALIM_DEPS_CONFIGURATION_NAME);
         }
 
         Set<MavenId> deps;
@@ -215,7 +215,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
             throw new UncheckedIOException(e);
         }
         for (MavenId dep : deps) {
-            project.getDependencies().add(GALIM_DEPS_CONFIGURATION_NAME, dep.toGAVNotation());
+            project.getDependencies().add(GslStarplanePlugin.GALIM_DEPS_CONFIGURATION_NAME, dep.toGAVNotation());
         }
 
         Set<File> transitiveDeps = galimDepsConfig.get().resolve();
@@ -301,7 +301,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
                 if (entry.getName().endsWith(".class")) {
                     ClassNode node = new ClassNode();
                     ClassReader reader = new ClassReader(zipIn);
-                    reader.accept(node, ClassReader.SKIP_CODE ^ ClassReader.SKIP_FRAMES);
+                    reader.accept(node, ClassReader.SKIP_CODE | ClassReader.SKIP_FRAMES);
                     nameToNode.put(node.name, node);
                 }
             }
