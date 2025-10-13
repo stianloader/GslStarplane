@@ -25,6 +25,9 @@ import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.mappingio.format.MappingFormat;
 
+import de.geolykt.starplane.remapping.MIOContainerFormat;
+import de.geolykt.starplane.remapping.MIOContainerFormat.MappingContainer;
+
 import groovy.lang.Closure;
 
 public class GslExtension {
@@ -41,7 +44,7 @@ public class GslExtension {
     @Nullable
     public List<Object> internalMods;
     @NotNull
-    public final List<Map.Entry<@NotNull MappingFormat, @NotNull Object>> mappings = new ArrayList<>();
+    public final List<Map.Entry<@NotNull MIOContainerFormat, @NotNull Object>> mappings = new ArrayList<>();
     @Nullable
     public Path modDirectory;
     @Nullable
@@ -89,6 +92,21 @@ public class GslExtension {
     }
 
     public void mappingsFile(@NotNull String format, @NotNull Object notation) {
+        this.mappingsFile(format, null, notation);
+    }
+
+    public void mappingsFile(@NotNull String format, @Nullable String containerFormat, @NotNull Object notation) {
+        MappingContainer cFormat;
+
+        if (containerFormat == null || containerFormat.isBlank()) {
+            cFormat = MappingContainer.PLAIN;
+        } else {
+            if (containerFormat.startsWith(".")) {
+                containerFormat = containerFormat.substring(1);
+            }
+            cFormat = MappingContainer.valueOf(containerFormat.toUpperCase(Locale.ROOT).replace('.', '_'));
+        }
+
         MappingFormat mFormat = null;
         try {
             mFormat = MappingFormat.valueOf(format.toUpperCase(Locale.ROOT));
@@ -101,6 +119,12 @@ public class GslExtension {
             }
             if (format.equalsIgnoreCase("tiny2") || format.equalsIgnoreCase("tinyv2")) {
                 mFormat = MappingFormat.TINY_2_FILE;
+            } else if (format.equalsIgnoreCase("enigma")) {
+                if (cFormat == MappingContainer.TAR_XZ) {
+                    mFormat = MappingFormat.ENIGMA_DIR;
+                } else {
+                    mFormat = MappingFormat.ENIGMA_FILE;
+                }
             } else if (mFormat == null) {
                 for (MappingFormat mf : MappingFormat.values()) {
                     if (mf.fileExt != null && mf.fileExt.equalsIgnoreCase(format)) {
@@ -115,7 +139,7 @@ public class GslExtension {
             throw new IllegalArgumentException("No mappings format known under the following name: '" + format + "'");
         }
 
-        this.mappings.add(new AbstractMap.SimpleImmutableEntry<>(mFormat, notation));
+        this.mappings.add(new AbstractMap.SimpleImmutableEntry<>(new MIOContainerFormat(mFormat, cFormat), notation));
     }
 
     public void softmapFile(@NotNull Object notation) {

@@ -9,7 +9,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -51,12 +50,12 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.slf4j.LoggerFactory;
 
-import net.fabricmc.mappingio.format.MappingFormat;
-
 import de.geolykt.starplane.Autodeobf;
 import de.geolykt.starplane.JarStripper;
 import de.geolykt.starplane.JarStripper.MavenId;
 import de.geolykt.starplane.ObfuscationHandler;
+import de.geolykt.starplane.remapping.MIOContainerFormat;
+import de.geolykt.starplane.remapping.MIOMappingTreeProvider;
 import de.geolykt.starplane.sourcegen.EnhancedJarSaver;
 import de.geolykt.starplane.sourcegen.FernflowerLoggerAdapter;
 
@@ -145,17 +144,17 @@ public class GslStarplanePlugin implements Plugin<Project> {
             }
         }
 
-        List<Map.Entry<@NotNull MappingFormat, @NotNull Path>> supplementaryMappings = new ArrayList<>();
-        for (Map.Entry<@NotNull MappingFormat, @NotNull Object> e : extension.mappings) {
+        List<@NotNull MIOMappingTreeProvider> supplementaryMappings = new ArrayList<>();
+        for (Map.Entry<@NotNull MIOContainerFormat, @NotNull Object> e : extension.mappings) {
             Object notation = e.getValue();
             if (notation instanceof Configuration) {
                 for (File f : ((Configuration) notation).resolve()) {
-                    supplementaryMappings.add(new AbstractMap.SimpleImmutableEntry<>(e.getKey(), f.toPath()));
+                    supplementaryMappings.add(new MIOMappingTreeProvider(e.getKey(), f.toPath()));
                 }
             } else if (notation instanceof Path) {
-                supplementaryMappings.add(new AbstractMap.SimpleImmutableEntry<>(e.getKey(), (Path) notation));
+                supplementaryMappings.add(new MIOMappingTreeProvider(e.getKey(), (Path) notation));
             } else {
-                supplementaryMappings.add(new AbstractMap.SimpleImmutableEntry<>(e.getKey(), project.file(notation).toPath()));
+                supplementaryMappings.add(new MIOMappingTreeProvider(e.getKey(), project.file(notation).toPath()));
             }
         }
 

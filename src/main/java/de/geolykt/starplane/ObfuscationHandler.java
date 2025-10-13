@@ -76,6 +76,8 @@ import de.geolykt.starloader.ras.ReversibleAccessSetterContext;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformFailure;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformScope;
 import de.geolykt.starplane.remapping.ChainMappingLookup;
+import de.geolykt.starplane.remapping.MIOContainerFormat;
+import de.geolykt.starplane.remapping.MIOMappingTreeProvider;
 import de.geolykt.starplane.remapping.RASRemapper;
 import de.geolykt.starplane.remapping.ReadOnlyMIOMappingLookup;
 import de.geolykt.starplane.remapping.ReadOnlyMappingLookupSink;
@@ -132,11 +134,11 @@ public class ObfuscationHandler {
 
     @NotNull
     @Unmodifiable
-    private final List<Map.Entry<@NotNull MappingFormat, @NotNull Path>> supplementaryMappings;
+    private final List<@NotNull MIOMappingTreeProvider> supplementaryMappings;
 
     public ObfuscationHandler(@NotNull Path cacheDir, @NotNull Path projectDir, @Nullable String rasContent,
             @NotNull @Unmodifiable Collection<@NotNull Path> softmapFiles,
-            @NotNull @Unmodifiable List<Map.Entry<@NotNull MappingFormat, @NotNull Path>> supplementaryMappings) {
+            @NotNull @Unmodifiable List<@NotNull MIOMappingTreeProvider> supplementaryMappings) {
         this.cacheDir = cacheDir;
         this.projectDir = projectDir;
         this.rasContent = rasContent;
@@ -227,17 +229,8 @@ public class ObfuscationHandler {
 
         if (!this.supplementaryMappings.isEmpty()) {
             LOGGER.info("Loading supplementary mappings");
-            ListIterator<Map.Entry<@NotNull MappingFormat, @NotNull Path>> it = this.supplementaryMappings.listIterator(0);
-
-            while (it.hasNext()) {
-                Map.Entry<@NotNull MappingFormat, @NotNull Path> supplementaryMapping = it.next();
-                VisitableMappingTree mappingTree = new MemoryMappingTree(); 
-                try {
-                    MappingReader.read(supplementaryMapping.getValue(), supplementaryMapping.getKey(), mappingTree);
-                } catch (IOException e) {
-                    throw new IOException("Unable to consume supplementary mappings file at " + supplementaryMapping, e);
-                }
-                mappingTree.reset();
+            for  (MIOMappingTreeProvider provider : this.supplementaryMappings) {
+                VisitableMappingTree mappingTree = provider.get();
                 lookups.add(new ReadOnlyMIOMappingLookup(mappingTree, mappingTree.getMinNamespaceId(), mappingTree.getMaxNamespaceId() - 1));
             }
         }
@@ -447,11 +440,8 @@ public class ObfuscationHandler {
             }
         }
 
-        for (Entry<@NotNull MappingFormat, @NotNull Path> e : this.supplementaryMappings) {
-            csum.update(e.getKey().ordinal());
-            try (CheckedInputStream cis = new CheckedInputStream(Files.newInputStream(e.getValue()), csum)) {
-                while (cis.read(ObfuscationHandler.IO_BUFFER) != -1); // Discard all read bytes
-            }
+        for (MIOMappingTreeProvider e : this.supplementaryMappings) {
+            e.checksum(csum, ObfuscationHandler.IO_BUFFER);
         }
 
         return Long.toUnsignedString(csum.getValue(), Character.MAX_RADIX);
@@ -677,14 +667,8 @@ public class ObfuscationHandler {
             }
 
             if (!this.supplementaryMappings.isEmpty()) {
-                for (Map.Entry<@NotNull MappingFormat, @NotNull Path> supplementaryMapping : this.supplementaryMappings) {
-                    VisitableMappingTree mappingTree = new MemoryMappingTree(); 
-                    try {
-                        MappingReader.read(supplementaryMapping.getValue(), supplementaryMapping.getKey(), mappingTree);
-                    } catch (IOException e) {
-                        throw new IllegalStateException("Unable to consume supplementary mappings file at " + supplementaryMapping, e);
-                    }
-                    mappingTree.reset();
+                for (MIOMappingTreeProvider supplementaryMapping : this.supplementaryMappings) {
+                    VisitableMappingTree mappingTree = supplementaryMapping.get();
 
                     TopLevelMemberLookup definitionLookup = new SimpleTopLevelLookup(deobfuscator.getClassNodesDirectly());
                     ReadOnlyMIOMappingLookup directLookup = new ReadOnlyMIOMappingLookup(mappingTree, mappingTree.getMinNamespaceId(), mappingTree.getMaxNamespaceId() - 1);
@@ -802,17 +786,8 @@ public class ObfuscationHandler {
 
         if (!this.supplementaryMappings.isEmpty()) {
             LOGGER.info("Loading supplementary mappings");
-            ListIterator<Map.Entry<@NotNull MappingFormat, @NotNull Path>> it = this.supplementaryMappings.listIterator(0);
-
-            while (it.hasNext()) {
-                Map.Entry<@NotNull MappingFormat, @NotNull Path> supplementaryMapping = it.next();
-                VisitableMappingTree mappingTree = new MemoryMappingTree(); 
-                try {
-                    MappingReader.read(supplementaryMapping.getValue(), supplementaryMapping.getKey(), mappingTree);
-                } catch (IOException e) {
-                    throw new IOException("Unable to consume supplementary mappings file at " + supplementaryMapping, e);
-                }
-                mappingTree.reset();
+            for  (MIOMappingTreeProvider provider : this.supplementaryMappings) {
+                VisitableMappingTree mappingTree = provider.get();
                 lookups.add(0, new ReadOnlyMIOMappingLookup(mappingTree, mappingTree.getMaxNamespaceId() - 1, mappingTree.getMinNamespaceId()));
             }
         }

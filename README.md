@@ -414,6 +414,65 @@ For mapping formats with multiple namespaces (such as those of the tiny family),
 the source namespace is the first column where as the destination (deobfuscated)
 namespace is the last column.
 
+### Using compressed mapping files
+
+Generally mapping files are not exactly large, however given that the
+formats generally prioritize user-legibility over space constraints,
+the artifacts when stored compressed are considerably smaller than when
+stored as-is.
+
+Although individual files are small, the very fast-paced nature of deobfuscation
+projects mean that the file sizes add up significantly. This isn't really
+an issue most of the time, but hosting costs can be minimized a bit when storing
+and transmitting compressed files. The difference outside of that is really neglible.
+
+Reading compressed mapping files is pretty similar to reading uncompressed formats.
+Instead of calling `mappingsFile` with two arguments, the `mappingsFile` method
+is called with three arguments. The first argument is the mapping format, while
+the second argument is the compression format. The third format is the source of
+the mappings.
+
+At this point, only the "tar.xz" and "xz" formats are supported.
+
+Examples:
+```groovy
+starplane {
+    mappingsFile("tinyv2", "plain", "deobf-mappings.tinyv2") // plain means no compression
+    mappingsFile("ENIGMA_DIR", "TAR_XZ", configurations["mappings"])
+    mappingsFile("enigma", "tar.xz", configurations["mappings"]) // Does the same thing as the method above
+    mappingsFile("ENIGMA_FILE", "XZ", "deobf.mapping.xz")
+     // Below call does the same thing as above (what enigma referrs to depends on the compression used)
+    mappingsFile("enigma", "xz", "deobf.mapping.xz")
+    mappingsFile("tinyv2", "xz", "deobf-tiny.tiny.xz")
+}
+```
+
+The "tar.xz" compression format is only valid for the engima_dir mappings format.
+The "xz" compression format does not support the enigma_dir mappings format, but does support all others.
+
+### Resolving 3rd party mapping artifacts
+
+Deobfuscation mappings can be resolved from a maven repository using gradle's
+`Configuration` infrastructure.
+
+The resulting code will be akin to follows:
+
+```groovy
+configurations {
+    mappings
+}
+
+starplane { // The `starplane` block must be AFTER the `configurations` block!
+    mappingsFile("ENIGMA_DIR", "TAR_XZ", configurations["mappings"])
+}
+
+dependencies {
+    mappings "de.geolykt:newStarmap:0.0.1@enigma.tar.xz"
+    // Same thing as the (commented) line below (note: deprecated syntax, so use for reference purposes only)
+    // mappings group: 'de.geolykt', name: 'newStarmap', version: '0.0.1', ext: "enigma.tar.xz"
+}
+```
+
 ### Using the development environment with asymmetric deobfuscation mappings
 
 *Hint*: By nature, the production environment uses the common "official"
@@ -605,9 +664,23 @@ and thus may not be able to detect certain mapping tears.
 
 ## Roadmap
 
+It is likely (although not guaranteed) that gslStarplane will be
+replaced by sml6 in the long term. Cause for gslStarplane being replaced
+is the fact that gslStarplane uses a relatively opaque inter-task dependency
+system, making it highly confusing for aspiring contributors. The way
+gslStarplane resolves galimulator, deobfuscates & decompiles it is further
+rather incompatible with gradle's task caching system enabled by default
+in gradle 9+. While it would be possible to refractor the mess, it makes
+more sense to clean it up a bit more and to just add gslStarplane's features
+to sml6 bit by bit.
+
+---
+
 Currently it is planned (or rather said, dreamed of) to offer Starplane as
 Eclipse and IntelliJ plugins, however due to the required effort needed to
 learn their plugin APIs this will only happen in the far future - if ever.
 
 A Maven integration is unlikely due to it apparently lacking the ability
-to add dependencies programmatically without touching the POM.
+to add dependencies programmatically without touching the POM (although
+that may be untrue - I've seen some sources hinting at it being possible,
+although a bit back-handed).
