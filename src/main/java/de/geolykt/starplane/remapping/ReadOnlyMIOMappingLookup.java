@@ -11,7 +11,7 @@ import net.fabricmc.mappingio.tree.MappingTreeView.ClassMappingView;
 import net.fabricmc.mappingio.tree.MappingTreeView.FieldMappingView;
 import net.fabricmc.mappingio.tree.MappingTreeView.MethodMappingView;
 
-public class ReadOnlyMIOMappingLookup implements MappingLookup, MappingSink {
+public class ReadOnlyMIOMappingLookup implements MappingLookup, MappingSink, CommentLookup {
     private final int dstNamespace;
     @NotNull
     private final MappingTreeView mappingIOTree;
@@ -75,5 +75,27 @@ public class ReadOnlyMIOMappingLookup implements MappingLookup, MappingSink {
     @NotNull
     public ReadOnlyMIOMappingLookup remapMember(@NotNull MemberRef srcRef, @NotNull String dstName) {
         throw new UnsupportedOperationException("Due to the complexities involved in the mapping process, this instance is read-only and only implements MappingSink for technical reasons");
+    }
+
+    @Override
+    @Nullable
+    public String getClassComment(@NotNull String className) {
+        ClassMappingView cmv = this.mappingIOTree.getClass(className, this.srcNamespace);
+        return cmv == null ? null : cmv.getComment();
+    }
+
+    @Override
+    @Nullable
+    public String getMethodComment(@NotNull String srcOwner, @NotNull String srcName, @NotNull String srcDesc) {
+        MethodMappingView mmv = this.mappingIOTree.getMethod(srcOwner, srcName, srcDesc, this.srcNamespace);
+        return mmv == null ? null : mmv.getComment();
+    }
+
+    @Override
+    @Nullable
+    public String getFieldComment(@NotNull String srcOwner, @NotNull String srcName,
+            @NotNull String srcDesc) {
+        FieldMappingView fmv = this.mappingIOTree.getField(srcOwner, srcName, srcDesc, this.srcNamespace);
+        return fmv == null ? null : fmv.getComment();
     }
 }

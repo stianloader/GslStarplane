@@ -54,10 +54,13 @@ import de.geolykt.starplane.Autodeobf;
 import de.geolykt.starplane.JarStripper;
 import de.geolykt.starplane.JarStripper.MavenId;
 import de.geolykt.starplane.ObfuscationHandler;
+import de.geolykt.starplane.remapping.CommentLookup;
 import de.geolykt.starplane.remapping.MIOContainerFormat;
 import de.geolykt.starplane.remapping.MIOMappingTreeProvider;
 import de.geolykt.starplane.sourcegen.EnhancedJarSaver;
 import de.geolykt.starplane.sourcegen.FernflowerLoggerAdapter;
+import de.geolykt.starplane.sourcegen.JavadocSource;
+import net.fabricmc.fernflower.api.IFabricJavadocProvider;
 
 public class GslStarplanePlugin implements Plugin<Project> {
 
@@ -242,7 +245,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
 
         if (obfHandler.didRefresh || Files.notExists(compileStrippedSource) && !Boolean.getBoolean("org.stianloader.starplane.skipDecompile")) {
             try {
-                decompile(project, runtimeLarge, compileStripped, compileStrippedSource, transitiveDeps);
+                GslStarplanePlugin.decompile(project, runtimeLarge, compileStripped, compileStrippedSource, transitiveDeps, obfHandler.getJavadocLookup());
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -258,7 +261,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
         obfHandler.didRefresh = false; // Everything else was reset so we can dare to reset that flag should this method be called multiple times
     }
 
-    private static void decompile(Project project, @NotNull Path runtimeLarge, @NotNull Path compileStripped, @NotNull Path compileStrippedSource, Set<File> transitiveDeps) throws IOException {
+    private static void decompile(Project project, @NotNull Path runtimeLarge, @NotNull Path compileStripped, @NotNull Path compileStrippedSource, Set<File> transitiveDeps, @NotNull CommentLookup javadocLookup) throws IOException {
         project.getLogger().info("Decompiling galimulator");
 
         // Time to decompile that stripped jar
@@ -272,6 +275,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
         args.put(IFernflowerPreferences.DUMP_CODE_LINES, "1");
         args.put(IFernflowerPreferences.DUMP_ORIGINAL_LINES, "1");
         args.put(IFernflowerPreferences.REMOVE_SYNTHETIC, "0"); // While it is a nice tool to see how good our deobfuscator is, sometimes it isn't that good
+        args.put(IFabricJavadocProvider.PROPERTY_NAME, new JavadocSource(javadocLookup));
 
         Map<String, int[]> lineMappings = new HashMap<>();
         try (EnhancedJarSaver jarSaver = new EnhancedJarSaver(compileStrippedSource.toFile(), lineMappings)) {
@@ -306,7 +310,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
             }
         }
 
-        Path intermediary = Files.createTempFile("gcmcstarplane-linereplane-" + ThreadLocalRandom.current().nextInt(), ".jar");
+        Path intermediary = Files.createTempFile("gslstarplane-linereplace-" + ThreadLocalRandom.current().nextInt(), ".jar");
         try (ZipInputStream zipIn = new ZipInputStream(Files.newInputStream(lineReplaceTarget), StandardCharsets.UTF_8);
                 ZipOutputStream zipOutputStream = new ZipOutputStream(Files.newOutputStream(intermediary), StandardCharsets.UTF_8)) {
             for (ZipEntry entry = zipIn.getNextEntry(); entry != null; entry = zipIn.getNextEntry()) {

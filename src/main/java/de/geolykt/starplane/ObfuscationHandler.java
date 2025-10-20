@@ -76,6 +76,7 @@ import de.geolykt.starloader.ras.ReversibleAccessSetterContext;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformFailure;
 import de.geolykt.starloader.ras.ReversibleAccessSetterContext.RASTransformScope;
 import de.geolykt.starplane.remapping.ChainMappingLookup;
+import de.geolykt.starplane.remapping.CommentLookup;
 import de.geolykt.starplane.remapping.MIOContainerFormat;
 import de.geolykt.starplane.remapping.MIOMappingTreeProvider;
 import de.geolykt.starplane.remapping.RASRemapper;
@@ -488,6 +489,20 @@ public class ObfuscationHandler {
             throw new IllegalStateException("Cannot resolve dependencies");
         }
         return cleanGalimJar.toPath();
+    }
+
+    @NotNull
+    public CommentLookup getJavadocLookup() throws IOException {
+        List<@NotNull MappingLookup> lookups = new ArrayList<>();
+
+        if (!this.supplementaryMappings.isEmpty()) {
+            for  (MIOMappingTreeProvider provider : this.supplementaryMappings) {
+                VisitableMappingTree mappingTree = provider.get();
+                lookups.add(0, new ReadOnlyMIOMappingLookup(mappingTree, mappingTree.getMaxNamespaceId() - 1, mappingTree.getMinNamespaceId()));
+            }
+        }
+
+        return new ChainMappingLookup(lookups.toArray(new MappingLookup[0]));
     }
 
     @NotNull
