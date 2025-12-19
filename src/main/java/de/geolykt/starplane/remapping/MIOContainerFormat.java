@@ -126,7 +126,7 @@ public class MIOContainerFormat {
 
                 try (InputStream rawIn = Files.newInputStream(path);
                         XZInputStream decompressedIn = new XZInputStream(rawIn);
-                        InputStreamReader reader = new InputStreamReader(rawIn);
+                        InputStreamReader reader = new InputStreamReader(decompressedIn);
                         BufferedReader bufferedReader = new BufferedReader(reader)) {
                     MappingReader.read(bufferedReader, format, visitor);
                 }
