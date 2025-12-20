@@ -40,6 +40,12 @@ public class ReadOnlyMappingLookupSink implements MappingLookup, MappingSink {
     }
 
     @Override
+    @Nullable
+    public String getRemappedParameterName(@NotNull String srcOwner, @NotNull String srcName, @NotNull String srcDesc, int paramIndex, boolean isStatic) {
+        return this.lookupDelegate.getRemappedParameterName(srcOwner, srcName, srcDesc, paramIndex, isStatic);
+    }
+
+    @Override
     @NotNull
     public ReadOnlyMappingLookupSink remapClass(@NotNull String srcName, @NotNull String dstName) {
         throw new UnsupportedOperationException("Mutation is not permitted.");
@@ -48,6 +54,12 @@ public class ReadOnlyMappingLookupSink implements MappingLookup, MappingSink {
     @Override
     @NotNull
     public ReadOnlyMappingLookupSink remapMember(@NotNull MemberRef srcRef, @NotNull String dstName) {
+        throw new UnsupportedOperationException("Mutation is not permitted.");
+    }
+
+    @Override
+    @NotNull
+    public MappingSink remapParameter(@NotNull String srcOwner, @NotNull String srcMethodName, @NotNull String srcDesc, int paramIndex, @NotNull String destParamName) {
         throw new UnsupportedOperationException("Mutation is not permitted.");
     }
 }

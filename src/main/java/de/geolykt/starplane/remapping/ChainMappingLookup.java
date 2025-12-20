@@ -1,5 +1,6 @@
 package de.geolykt.starplane.remapping;
 
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.stianloader.remapper.MappingLookup;
@@ -15,8 +16,11 @@ public class ChainMappingLookup implements MappingLookup, CommentLookup {
         this.lookupDelegates = lookups;
     }
 
-    public void enableDebugMode(boolean debug) {
+    @NotNull
+    @Contract(pure = false, mutates = "this", value = "_ -> this")
+    public ChainMappingLookup enableDebugMode(boolean debug) {
         this.debugMode = debug;
+        return this;
     }
 
     @Override
@@ -75,7 +79,42 @@ public class ChainMappingLookup implements MappingLookup, CommentLookup {
     }
 
     @Override
-    public @Nullable String getClassComment(@NotNull String srcName) {
+    @Nullable
+    public String getRemappedParameterName(@NotNull String srcOwner, @NotNull String srcName, @NotNull String srcDesc, int paramIndex, boolean isStatic) {
+        StringBuilder descBuilder = new StringBuilder();
+
+        String paramName = null;
+
+        for (MappingLookup lookup : this.lookupDelegates) {
+            if (this.debugMode) {
+                String mappingName = lookup.toString();
+                if (mappingName.length() < 64) {
+                    mappingName += " ".repeat(64 - mappingName.length());
+                }
+                System.out.println("\tp\t" + lookup.toString() + "\t" + srcOwner + '.' + srcName + srcDesc + " -> " + paramName + "@" + paramIndex);
+            }
+
+            String v = lookup.getRemappedParameterName(srcOwner, srcName, srcDesc, paramIndex, isStatic);
+
+            if (v != null) {
+                paramName = v;
+            }
+
+            srcName = lookup.getRemappedMethodName(srcOwner, srcName, srcDesc);
+            srcDesc = Remapper.getRemappedMethodDescriptor(lookup, srcDesc, descBuilder);
+            srcOwner = lookup.getRemappedClassName(srcOwner);
+        }
+
+        if (this.debugMode) {
+            System.out.println("\t-\t" + ".".repeat(64) + "\t" + srcOwner + '.' + srcName + srcDesc + " -> " + paramName + "@" + paramIndex + "\n");
+        }
+
+         return srcName;
+    }
+
+    @Override
+    @Nullable
+    public String getClassComment(@NotNull String srcName) {
         String lastComment = null;
         for (MappingLookup lookup : this.lookupDelegates) {
             if (lookup instanceof CommentLookup) {
@@ -90,8 +129,8 @@ public class ChainMappingLookup implements MappingLookup, CommentLookup {
     }
 
     @Override
-    public @Nullable String getFieldComment(@NotNull String srcOwner, @NotNull String srcName,
-            @NotNull String srcDesc) {
+    @Nullable
+    public String getFieldComment(@NotNull String srcOwner, @NotNull String srcName, @NotNull String srcDesc) {
         StringBuilder descBuilder = new StringBuilder();
         String lastComment = null;
         for (MappingLookup lookup : this.lookupDelegates) {
@@ -121,8 +160,7 @@ public class ChainMappingLookup implements MappingLookup, CommentLookup {
     }
 
     @Override
-    public @Nullable String getMethodComment(@NotNull String srcOwner, @NotNull String srcName,
-            @NotNull String  srcDesc) {
+    public @Nullable String getMethodComment(@NotNull String srcOwner, @NotNull String srcName, @NotNull String  srcDesc) {
         StringBuilder descBuilder = new StringBuilder();
         String lastComment = null;
         for (MappingLookup lookup : this.lookupDelegates) {

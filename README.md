@@ -48,6 +48,15 @@ pluginManagement {
 And that is it! Unfortunately you won't be able to use the plugin for much
 with such a setup. So continue reading!
 
+## Using the configuration cache
+
+When using this plugin, gradle's configuration cache must be **DISABLED**.
+
+This is due to how gslStarplane internally handles hidden relations between
+it's tasks and especially the (de-/re-)obfuscation process. I apologize,
+but there are simply not enough resources to justify the necessary changes
+when overall it would have minimal impact across the core infrastructure.
+
 ## Specifying reversible access setters
 
 **WARNING:** Reversible access setters are as dangerous as they are simple to

@@ -688,6 +688,7 @@ public class ObfuscationHandler {
                     TopLevelMemberLookup definitionLookup = new SimpleTopLevelLookup(deobfuscator.getClassNodesDirectly());
                     ReadOnlyMIOMappingLookup directLookup = new ReadOnlyMIOMappingLookup(mappingTree, mappingTree.getMinNamespaceId(), mappingTree.getMaxNamespaceId() - 1);
                     HierarchyAwareMappingDelegator<ReadOnlyMIOMappingLookup> hierarchicalLookup = new HierarchyAwareMappingDelegator<>(directLookup, definitionLookup);
+//                    HierarchyAwareMappingDelegator<ReadOnlyMappingLookupSink> hierarchicalLookup = new HierarchyAwareMappingDelegator<>(new ReadOnlyMappingLookupSink(new ChainMappingLookup(directLookup).enableDebugMode(true)), definitionLookup);
                     Remapper remapper = new Remapper(hierarchicalLookup);
                     StringBuilder sharedBuilder = new StringBuilder();
                     for (ClassNode node : deobfuscator.getClassNodesDirectly()) {
