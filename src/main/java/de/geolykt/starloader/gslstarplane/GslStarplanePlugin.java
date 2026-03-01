@@ -67,7 +67,6 @@ public class GslStarplanePlugin implements Plugin<Project> {
     public static final String TASK_GROUP = "GslStarplane";
     public static final String GALIM_DEPS_CONFIGURATION_NAME = "galimulatorDependencies";
     public static final String DEV_RUNTIME_CONFIGURATION_NAME = "devRuntime";
-    static final WeakHashMap<Project, ObfuscationHandler> OBF_HANDLERS = new WeakHashMap<>();
     static final WeakHashMap<Project, JavaExec> RUN_TASKS = new WeakHashMap<>();
 
     public void apply(Project project) {
@@ -78,7 +77,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
             task.setDescription("Remap deobfuscated jars to use obfuscated mappings.");
             task.setGroup(GslStarplanePlugin.TASK_GROUP);
         });
-        project.getConfigurations().register(DEV_RUNTIME_CONFIGURATION_NAME).configure(configuration -> {
+        project.getConfigurations().register(GslStarplanePlugin.DEV_RUNTIME_CONFIGURATION_NAME).configure(configuration -> {
             configuration.setVisible(false);
             configuration.setCanBeResolved(true);
             configuration.setDescription("Dependencies included in the development runtime.");
@@ -127,12 +126,12 @@ public class GslStarplanePlugin implements Plugin<Project> {
     }
 
     private static void runDeobf(Project project) {
-        if (GslStarplanePlugin.OBF_HANDLERS.containsKey(project)) {
+        GslExtension extension = project.getExtensions().getByType(GslExtension.class);
+        if (extension.obfuscationHandler != null) {
             return;
         }
-        Path altCache = project.getLayout().getBuildDirectory().getAsFile().get().toPath().resolve("gsl-starplane");
 
-        GslExtension extension = project.getExtensions().getByType(GslExtension.class);
+        Path altCache = project.getLayout().getBuildDirectory().getAsFile().get().toPath().resolve("gsl-starplane");
 
         Set<@NotNull Path> softmapFiles = new HashSet<>();
         for (Object notation : extension.softmapMappings) {
@@ -165,9 +164,10 @@ public class GslStarplanePlugin implements Plugin<Project> {
         supplementaryMappings = Collections.unmodifiableList(supplementaryMappings);
 
         ObfuscationHandler oHandler = new ObfuscationHandler(altCache, project.getProjectDir().toPath(), extension.getRASContents(project), softmapFiles, supplementaryMappings);
-        GslStarplanePlugin.OBF_HANDLERS.put(project, oHandler);
+        extension.obfuscationHandler = oHandler;
         resolve(project, oHandler);
         JavaExec runTask = GslStarplanePlugin.RUN_TASKS.get(project);
+
         if (runTask != null) {
             runTask.systemProperty("de.geolykt.starloader.launcher.CLILauncher.mainClass", "com.example.Main");
             Path modsDir = extension.modDirectory;
@@ -181,7 +181,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
     static String getBootPath(Project p) {
         JSONArray bootPath = new JSONArray();
         try {
-            bootPath.put(GslStarplanePlugin.OBF_HANDLERS.get(p).getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toUri().toURL().toExternalForm());
+            bootPath.put(p.getExtensions().getByType(GslExtension.class).obfuscationHandler.getTransformedGalimulatorJar().toAbsolutePath().resolveSibling("galimulator-remapped-rt.jar").toUri().toURL().toExternalForm());
             for (File f : p.getConfigurations().getByName(GslStarplanePlugin.GALIM_DEPS_CONFIGURATION_NAME).resolve()) {
                 bootPath.put(f.toURI().toURL().toExternalForm());
             }
@@ -254,9 +254,12 @@ public class GslStarplanePlugin implements Plugin<Project> {
         project.getRepositories().flatDir((repo) -> {
             repo.dir(compileLarge.getParent());
             repo.setName("generated-galimulator-remapped");
+            LoggerFactory.getLogger(GslExtension.class).warn("GslStarplane repository path set to {}", repo.getDirs());
         });
 
         project.getDependencies().add("compileOnly", ":galimulator-remapped-stripped:" + Autodeobf.getVersion());
+
+        LoggerFactory.getLogger(GslExtension.class).warn("GslStarplane refresh sucess with remapped artifact at {} ({}) & source at {} ({})", compileStripped, compileStripped.toAbsolutePath(), compileStrippedSource, compileStrippedSource.toAbsolutePath());
 
         obfHandler.didRefresh = false; // Everything else was reset so we can dare to reset that flag should this method be called multiple times
     }

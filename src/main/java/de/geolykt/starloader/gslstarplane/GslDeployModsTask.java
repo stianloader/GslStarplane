@@ -184,7 +184,7 @@ public abstract class GslDeployModsTask extends ConventionTask {
     private void transform(@NotNull Path source, @NotNull Path target) {
         try {
             if (this.getRemapMods().get()) {
-                GslStarplanePlugin.OBF_HANDLERS.get(this.getProject()).deobfuscateJar(source, target);
+                this.getProject().getExtensions().getByType(GslExtension.class).obfuscationHandler.deobfuscateJar(source, target);
             } else {
                 Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
             }

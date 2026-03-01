@@ -46,7 +46,9 @@ public abstract class GslRemapJarTask extends Jar {
                     return result;
                 }
             }
-            ObfuscationHandler oHandler = GslStarplanePlugin.OBF_HANDLERS.get(super.getProject());
+
+            ObfuscationHandler oHandler = super.getProject().getExtensions().getByType(GslExtension.class).obfuscationHandler;
+
             if (oHandler == null) {
                 throw new IllegalStateException("Obfuscation handler not set for this project: " + super.getProject().getName());
             }

@@ -25,6 +25,7 @@ import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.mappingio.format.MappingFormat;
 
+import de.geolykt.starplane.ObfuscationHandler;
 import de.geolykt.starplane.remapping.MIOContainerFormat;
 import de.geolykt.starplane.remapping.MIOContainerFormat.MappingContainer;
 
@@ -45,6 +46,7 @@ public class GslExtension {
     public List<Object> internalMods;
     @NotNull
     public final List<Map.Entry<@NotNull MIOContainerFormat, @NotNull Object>> mappings = new ArrayList<>();
+    ObfuscationHandler obfuscationHandler;
     @Nullable
     public Path modDirectory;
     @Nullable
@@ -103,6 +105,7 @@ public class GslExtension {
         } else {
             if (containerFormat.startsWith(".")) {
                 containerFormat = containerFormat.substring(1);
+                assert containerFormat != null;
             }
             cFormat = MappingContainer.valueOf(containerFormat.toUpperCase(Locale.ROOT).replace('.', '_'));
         }

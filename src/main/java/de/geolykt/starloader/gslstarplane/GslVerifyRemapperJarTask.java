@@ -171,7 +171,7 @@ public abstract class GslVerifyRemapperJarTask extends ConventionTask {
             }
 
             if (this.getIncludingGalimulatorJar().getOrElse(Boolean.TRUE)) {
-                FileCollection galim = this.getProject().files(GslStarplanePlugin.OBF_HANDLERS.get(this.getProject()).getOriginalGalimulatorJar());
+                FileCollection galim = this.getProject().files(this.getProject().getExtensions().getByType(GslExtension.class).obfuscationHandler.getOriginalGalimulatorJar());
                 if (cp != null) {
                     cp = cp.plus(galim);
                 } else {
