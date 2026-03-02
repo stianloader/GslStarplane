@@ -106,6 +106,7 @@ public class GslStarplanePlugin implements Plugin<Project> {
             LoggerFactory.getLogger(GslStarplanePlugin.class).error("Cannot setup EEA as the eclipse plugin is missing!");
             return;
         }
+
         // Based on https://github.com/eclipse/buildship/issues/421#issuecomment-285344240
         eclipseModel.getClasspath().containers("org.eclipse.buildship.core.gradleclasspathcontainer");
         eclipseModel.getClasspath().file((merger) -> {
@@ -254,12 +255,12 @@ public class GslStarplanePlugin implements Plugin<Project> {
         project.getRepositories().flatDir((repo) -> {
             repo.dir(compileLarge.getParent());
             repo.setName("generated-galimulator-remapped");
-            LoggerFactory.getLogger(GslExtension.class).warn("GslStarplane repository path set to {}", repo.getDirs());
+            LoggerFactory.getLogger(GslExtension.class).info("GslStarplane repository path set to {}", repo.getDirs());
         });
 
         project.getDependencies().add("compileOnly", ":galimulator-remapped-stripped:" + Autodeobf.getVersion());
 
-        LoggerFactory.getLogger(GslExtension.class).warn("GslStarplane refresh sucess with remapped artifact at {} ({}) & source at {} ({})", compileStripped, compileStripped.toAbsolutePath(), compileStrippedSource, compileStrippedSource.toAbsolutePath());
+        LoggerFactory.getLogger(GslExtension.class).info("GslStarplane refresh sucess with remapped artifact at {} ({}) & source at {} ({})", compileStripped, compileStripped.toAbsolutePath(), compileStrippedSource, compileStrippedSource.toAbsolutePath());
 
         obfHandler.didRefresh = false; // Everything else was reset so we can dare to reset that flag should this method be called multiple times
     }
