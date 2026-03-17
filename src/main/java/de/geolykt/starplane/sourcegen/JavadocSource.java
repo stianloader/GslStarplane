@@ -31,5 +31,4 @@ public class JavadocSource implements IFabricJavadocProvider {
     public String getMethodDoc(StructClass structClass, StructMethod structMethod) {
         return this.commentLookup.getMethodComment(structClass.qualifiedName, structMethod.getName(), structMethod.getDescriptor());
     }
-
 }

@@ -165,7 +165,7 @@ public class ChainMappingLookup implements MappingLookup, CommentLookup {
         String lastComment = null;
         for (MappingLookup lookup : this.lookupDelegates) {
             if (lookup instanceof CommentLookup) {
-                String comment = ((CommentLookup) lookup).getFieldComment(srcOwner, srcName, srcDesc);
+                String comment = ((CommentLookup) lookup).getMethodComment(srcOwner, srcName, srcDesc);
                 if (comment != null) {
                     lastComment = comment;
                 }
